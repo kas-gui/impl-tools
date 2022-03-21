@@ -99,8 +99,64 @@ use syn::parse_macro_input;
 use syn::{spanned::Spanned, Item};
 
 mod autoimpl;
+mod default;
 pub(crate) mod generics;
 mod scope;
+
+/// Implement `Default`
+///
+/// This macro may be used in one of two ways.
+///
+/// ### Type-level initialiser
+///
+/// ```
+/// # use impl_tools::default;
+/// /// A simple enum; default value is Blue
+/// #[default(Colour::Blue)]
+/// enum Colour {
+///     Red,
+///     Green,
+///     Blue,
+/// }
+/// ```
+///
+/// ### Field-level initialiser
+///
+/// TODO
+#[proc_macro_attribute]
+#[proc_macro_error]
+pub fn default(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let attr = parse_macro_input!(attr as default::Attr);
+    if let Some(expr) = attr.as_expr() {
+        let mut toks = item.clone();
+        match parse_macro_input!(item as Item) {
+            Item::Enum(syn::ItemEnum {
+                ident, generics, ..
+            })
+            | Item::Struct(syn::ItemStruct {
+                ident, generics, ..
+            })
+            | Item::Type(syn::ItemType {
+                ident, generics, ..
+            })
+            | Item::Union(syn::ItemUnion {
+                ident, generics, ..
+            }) => {
+                let impl_: TokenStream = expr.gen(ident, generics).into();
+                toks.extend(std::iter::once(impl_));
+            }
+            item => {
+                emit_error!(
+                    item.span(),
+                    "default: only supports enum, struct, type alias and union items"
+                );
+            }
+        };
+        toks
+    } else {
+        todo!()
+    }
+}
 
 /// A variant of the standard `derive` macro
 ///
@@ -236,7 +292,10 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
                 Item::Struct(item) => autoimpl::autoimpl_struct(attr, item),
                 Item::Trait(item) => autoimpl::autoimpl_trait(attr, item),
                 item => {
-                    emit_error!(item.span(), "autoimpl: does not support this item type");
+                    emit_error!(
+                        item.span(),
+                        "autoimpl: only supports struct and trait items"
+                    );
                     return toks;
                 }
             }));
