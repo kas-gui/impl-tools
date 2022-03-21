@@ -118,11 +118,34 @@ mod scope;
 ///     Green,
 ///     Blue,
 /// }
+///
+/// fn main() {
+///     assert!(matches!(Colour::default(), Colour::Blue));
+/// }
 /// ```
 ///
 /// ### Field-level initialiser
 ///
-/// TODO
+/// This variant only supports structs. Fields specified as `name: type = expr`
+/// will be initialised with `expr`, while other fields will be initialised with
+/// `Defualt::default()`.
+///
+/// ```
+/// # use impl_tools::Default;
+/// #[default]
+/// struct Person {
+///     name: String = "Jane Doe",
+///     age: u32 = 72,
+///     occupation: String,
+/// }
+///
+/// fn main() {
+///     let person = Person::default();
+///     assert_eq!(person.name, "Jane Doe");
+///     assert_eq!(person.age, 72);
+///     assert_eq!(person.occupation, "");
+/// }
+/// ```
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn default(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -154,7 +177,10 @@ pub fn default(attr: TokenStream, item: TokenStream) -> TokenStream {
         };
         toks
     } else {
-        todo!()
+        let item = parse_macro_input!(item as default::Struct);
+        let toks = item.gen().into();
+        println!("{toks}");
+        toks
     }
 }
 
