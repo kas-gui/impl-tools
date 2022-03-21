@@ -32,17 +32,9 @@ jobs:
       - name: Clippy
         run: cargo clippy --all
 
-  test:
-    name: Test MSRV
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest]
-        toolchain: [stable]
-        include:
-          - os: ubuntu-latest
-            toolchain: "1.56.0"
+  stable:
+    name: Stable on Windows
+    runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v2
@@ -50,7 +42,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ matrix.toolchain }}
+          toolchain: stable
           override: true
           components: clippy
 
@@ -58,3 +50,20 @@ jobs:
         run: cargo test --all-features
       - name: Clippy (stable)
         run: cargo clippy --all -- -D warnings -A unknown_lints
+
+  msrv:
+    name: MSRV
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: "1.56.0"
+          override: true
+          components: clippy
+
+      - name: Test
+        run: cargo test --all-features --lib --tests
