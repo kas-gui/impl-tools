@@ -1,10 +1,10 @@
 [package]
 name = "impl-tools"
-version = "0.0.0"
+version = "0.1.0"
 authors = ["Diggory Hardy <git@dhardy.name>"]
 edition = "2021"
 license = "MIT/Apache-2.0"
-description = "A set of helper macros"
+description = "Helper macros: autoimpl"
 keywords = ["proc-macro", "macro", "derive", "trait", "procedural"]
 categories = ["development-tools::procedural-macro-helpers"]
 repository = "https://github.com/kas-gui/impl-tools"
