@@ -54,6 +54,9 @@
 //! }
 //! ```
 
+#[cfg(doctest)]
+doc_comment::doctest!("../README.md");
+
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
