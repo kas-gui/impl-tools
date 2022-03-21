@@ -15,3 +15,12 @@ documentation = "https://docs.rs/impl-tools/"
 proc-macro = true
 
 [dependencies]
+quote = "1.0"
+proc-macro2 = { version = "1.0" }
+proc-macro-error = "1.0"
+
+[dependencies.syn]
+version = "1.0.14"
+# We need 'extra-traits' for equality testing
+# We need 'full' for parsing macros within macro arguments
+features = ["extra-traits", "full"]
