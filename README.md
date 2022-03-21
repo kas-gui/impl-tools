@@ -4,6 +4,12 @@ Impltools
 A set of helper macros
 
 
+Minimum Supported Rust Version
+------------------------------
+
+The MSRV is 1.56.0 (first to support Edition 2021).
+
+
 Copyright and Licence
 ---------------------
 

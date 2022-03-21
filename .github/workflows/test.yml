@@ -1,0 +1,60 @@
+name: Tests
+
+on:
+  push:
+    branches: [ master, '[0-9]+.[0-9]+' ]
+  pull_request:
+    branches: [ master, '[0-9]+.[0-9]+' ]
+
+jobs:
+  nightly:
+    name: Nightly, format and Doc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+
+      - name: Rustfmt check
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+      - name: Build docs
+        run: cargo doc --all-features --all --no-deps
+      - name: Test
+        run: cargo test --all-features
+      - name: Clippy
+        run: cargo clippy --all
+
+  test:
+    name: Test MSRV
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+        toolchain: [stable]
+        include:
+          - os: ubuntu-latest
+            toolchain: "1.56.0"
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.toolchain }}
+          override: true
+          components: clippy
+
+      - name: Test
+        run: cargo test --all-features
+      - name: Clippy (stable)
+        run: cargo clippy --all -- -D warnings -A unknown_lints
