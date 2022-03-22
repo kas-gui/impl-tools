@@ -89,10 +89,12 @@ impl_scope! {
 ```
 
 
-Minimum Supported Rust Version
+Supported Rust Versions
 ------------------------------
 
 The MSRV is 1.56.0 (first to support Edition 2021).
+
+Using a nightly compiler will improve diagnostics.
 
 
 Copyright and Licence
