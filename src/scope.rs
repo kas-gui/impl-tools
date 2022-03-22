@@ -3,13 +3,14 @@
 // You may obtain a copy of the License in the LICENSE-APACHE file or at:
 //     https://www.apache.org/licenses/LICENSE-2.0
 
-use proc_macro2::TokenStream;
+use crate::default::{impl_default, Fields};
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::punctuated::Punctuated;
 use syn::token::{Brace, Comma, Semi};
 use syn::{
-    Attribute, Fields, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Result, Token, Type,
-    Variant, Visibility,
+    parse_quote, Attribute, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Result, Token,
+    Type, Variant, Visibility,
 };
 
 /// Content of items supported by [`Scope`] that are not common to all variants
@@ -35,6 +36,17 @@ pub enum ScopeItem {
     },
 }
 
+impl ScopeItem {
+    pub fn token_span(&self) -> Span {
+        match self {
+            ScopeItem::Enum { token, .. } => token.span,
+            ScopeItem::Struct { token, .. } => token.span,
+            ScopeItem::Type { token, .. } => token.span,
+            ScopeItem::Union { token, .. } => token.span,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Scope {
     pub attrs: Vec<Attribute>,
@@ -44,15 +56,33 @@ pub struct Scope {
     pub item: ScopeItem,
     pub semi: Option<Semi>,
     pub impls: Vec<ItemImpl>,
+    pub generated: Vec<TokenStream>,
+}
+
+impl Scope {
+    pub fn apply_attrs(&mut self) -> Result<()> {
+        let mut i = 0;
+        while i < self.attrs.len() {
+            if self.attrs[i].path == parse_quote! { impl_default } {
+                let attr = self.attrs.remove(i);
+                impl_default(attr.tokens, self)?;
+                continue;
+            }
+
+            i += 1;
+        }
+        Ok(())
+    }
 }
 
 mod parsing {
     use super::*;
+    use crate::default::parsing::data_struct;
     use syn::parse::{Parse, ParseStream};
     use syn::spanned::Spanned;
     use syn::{
-        braced, bracketed, parse_quote, token::Paren, AttrStyle, Error, Field, Lifetime, Path,
-        TypePath, WhereClause,
+        braced, bracketed, parse_quote, AttrStyle, Error, Field, Lifetime, Path, TypePath,
+        WhereClause,
     };
 
     impl Parse for Scope {
@@ -132,6 +162,7 @@ mod parsing {
                 item,
                 semi,
                 impls,
+                generated: vec![],
             })
         }
     }
@@ -235,42 +266,6 @@ mod parsing {
         })
     }
 
-    pub fn data_struct(
-        input: ParseStream,
-    ) -> Result<(Option<WhereClause>, Fields, Option<Token![;]>)> {
-        let mut lookahead = input.lookahead1();
-        let mut where_clause = None;
-        if lookahead.peek(Token![where]) {
-            where_clause = Some(input.parse()?);
-            lookahead = input.lookahead1();
-        }
-
-        if where_clause.is_none() && lookahead.peek(Paren) {
-            let fields = input.parse()?;
-
-            lookahead = input.lookahead1();
-            if lookahead.peek(Token![where]) {
-                where_clause = Some(input.parse()?);
-                lookahead = input.lookahead1();
-            }
-
-            if lookahead.peek(Token![;]) {
-                let semi = input.parse()?;
-                Ok((where_clause, Fields::Unnamed(fields), Some(semi)))
-            } else {
-                Err(lookahead.error())
-            }
-        } else if lookahead.peek(Brace) {
-            let fields = parse_braced(input)?;
-            Ok((where_clause, Fields::Named(fields), None))
-        } else if lookahead.peek(Token![;]) {
-            let semi = input.parse()?;
-            Ok((where_clause, Fields::Unit, Some(semi)))
-        } else {
-            Err(lookahead.error())
-        }
-    }
-
     pub fn data_enum(
         input: ParseStream,
     ) -> Result<(Option<WhereClause>, Brace, Punctuated<Variant, Token![,]>)> {
@@ -369,6 +364,7 @@ mod printing {
             }
 
             tokens.append_all(self.impls.iter());
+            tokens.append_all(self.generated.iter());
         }
     }
 }
@@ -422,6 +418,7 @@ fn extend_generics(generics: &mut Generics, in_generics: &Generics) {
     }
 }
 
-pub fn scope(scope: Scope) -> Result<TokenStream> {
+pub fn scope(mut scope: Scope) -> Result<TokenStream> {
+    scope.apply_attrs()?;
     Ok(quote! { #scope })
 }

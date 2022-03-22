@@ -3,25 +3,76 @@
 // You may obtain a copy of the License in the LICENSE-APACHE file or at:
 //     https://www.apache.org/licenses/LICENSE-2.0
 
-use proc_macro2::TokenStream;
+use crate::scope::{Scope, ScopeItem};
+use proc_macro2::{Span, TokenStream};
+use proc_macro_error::emit_error;
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::parse::{Parse, ParseStream, Result};
+use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{token, Attribute, Expr, Generics, Ident, Token, Type, Visibility};
 
+pub fn impl_default(attr: TokenStream, scope: &mut Scope) -> Result<()> {
+    let attr: Attr = syn::parse2(attr)?;
+    if let Some(expr) = attr.as_expr() {
+        scope
+            .generated
+            .push(expr.gen(&scope.ident, &scope.generics));
+    } else {
+        let fields = match &mut scope.item {
+            ScopeItem::Struct { fields, .. } => match fields {
+                Fields::Named(FieldsNamed { fields, .. })
+                | Fields::Unnamed(FieldsUnnamed { fields, .. }) => {
+                    let iter = fields.iter_mut().map(|field| {
+                        let ident = &field.ident;
+                        if let Some(expr) = field.assign.take().map(|a| a.1) {
+                            quote! { #ident : #expr }
+                        } else {
+                            quote! { #ident : Default::default() }
+                        }
+                    });
+                    quote! { #(#iter),* }
+                }
+                Fields::Unit => quote! {},
+            },
+            _ => {
+                return Err(Error::new(
+                    scope.item.token_span(),
+                    "must specify value as `#[impl_default(value)]` on non-struct type",
+                ));
+            }
+        };
+
+        let ident = &scope.ident;
+        let (impl_generics, ty_generics, wc) = scope.generics.split_for_impl();
+
+        scope.generated.push(quote! {
+            impl #impl_generics std::default::Default for #ident #ty_generics #wc {
+                fn default() -> Self {
+                    #ident {
+                        #fields
+                    }
+                }
+            }
+        });
+    }
+    Ok(())
+}
+
 pub struct Attr {
     expr: Option<Expr>,
+    pub span: Span,
 }
 
 impl Parse for Attr {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut expr = None;
+        let span = input.span();
 
         if !input.is_empty() {
             expr = Some(input.parse()?);
         }
 
-        Ok(Attr { expr })
+        Ok(Attr { expr, span })
     }
 }
 
@@ -33,7 +84,7 @@ impl Attr {
 
 pub struct AsExpr(Expr);
 impl AsExpr {
-    pub fn gen(self, ident: Ident, generics: Generics) -> TokenStream {
+    pub fn gen(self, ident: &Ident, generics: &Generics) -> TokenStream {
         let (impl_generics, ty_generics, wc) = generics.split_for_impl();
         let expr = self.0;
 
@@ -57,56 +108,27 @@ pub struct Struct {
     semi_token: Option<Token![;]>,
 }
 
-impl Struct {
-    pub fn gen(self) -> TokenStream {
-        let mut toks = TokenStream::new();
-        self.to_tokens(&mut toks);
-
-        let ident = &self.ident;
-        let (impl_generics, ty_generics, wc) = self.generics.split_for_impl();
-
-        let fields = match self.fields {
-            Fields::Named(FieldsNamed { fields, .. })
-            | Fields::Unnamed(FieldsUnnamed { fields, .. }) => {
-                let iter = fields
-                    .iter()
-                    .map(|field| field.assign.as_ref().map(|a| &a.1));
-                quote! { #(#iter),* }
-            }
-            Fields::Unit => quote! {},
-        };
-
-        toks.append_all(quote! {
-            impl #impl_generics std::default::Default for #ident #ty_generics #wc {
-                fn default() -> Self {
-                    #ident {
-                        #fields
-                    }
-                }
-            }
-        });
-
-        toks
-    }
-}
-
-enum Fields {
+#[derive(Debug)]
+pub enum Fields {
     Named(FieldsNamed),
     Unnamed(FieldsUnnamed),
     Unit,
 }
 
+#[derive(Debug)]
 pub struct FieldsNamed {
     brace_token: token::Brace,
     fields: Punctuated<Field, Token![,]>,
 }
 
-struct FieldsUnnamed {
+#[derive(Debug)]
+pub struct FieldsUnnamed {
     paren_token: token::Paren,
     fields: Punctuated<Field, Token![,]>,
 }
 
-struct Field {
+#[derive(Debug)]
+pub struct Field {
     attrs: Vec<Attribute>,
     vis: Visibility,
     ident: Option<Ident>,
@@ -116,19 +138,19 @@ struct Field {
 }
 
 // Copied from syn, modified
-mod parsing {
+pub(crate) mod parsing {
     use super::*;
     use syn::ext::IdentExt;
-    use syn::{braced, bracketed, parenthesized, AttrStyle, Path, WhereClause};
+    use syn::{braced, parenthesized, WhereClause};
 
     impl Parse for Struct {
         fn parse(input: ParseStream) -> Result<Self> {
-            let mut attrs = input.call(Attribute::parse_outer)?;
+            let attrs = input.call(Attribute::parse_outer)?;
             let vis = input.parse::<Visibility>()?;
             let struct_token = input.parse::<Token![struct]>()?;
             let ident = input.parse::<Ident>()?;
             let generics = input.parse::<Generics>()?;
-            let (where_clause, fields, semi_token) = parsing::data_struct(input, &mut attrs)?;
+            let (where_clause, fields, semi_token) = parsing::data_struct(input)?;
             Ok(Struct {
                 attrs,
                 vis,
@@ -200,9 +222,8 @@ mod parsing {
         }
     }
 
-    pub(super) fn data_struct(
+    pub(crate) fn data_struct(
         input: ParseStream,
-        attrs: &mut Vec<Attribute>,
     ) -> Result<(Option<WhereClause>, Fields, Option<Token![;]>)> {
         let mut lookahead = input.lookahead1();
         let mut where_clause = None;
@@ -227,7 +248,7 @@ mod parsing {
                 Err(lookahead.error())
             }
         } else if lookahead.peek(token::Brace) {
-            let fields = parse_braced(input, attrs)?;
+            let fields = parse_braced(input)?;
             Ok((where_clause, Fields::Named(fields), None))
         } else if lookahead.peek(Token![;]) {
             let semi = input.parse()?;
@@ -237,32 +258,13 @@ mod parsing {
         }
     }
 
-    fn parse_braced(input: ParseStream, attrs: &mut Vec<Attribute>) -> Result<FieldsNamed> {
+    fn parse_braced(input: ParseStream) -> Result<FieldsNamed> {
         let content;
         let brace_token = braced!(content in input);
-        parse_inner(&content, attrs)?;
         let fields = content.parse_terminated(Field::parse_named)?;
         Ok(FieldsNamed {
             brace_token,
             fields,
-        })
-    }
-
-    fn parse_inner(input: ParseStream, attrs: &mut Vec<Attribute>) -> Result<()> {
-        while input.peek(Token![#]) && input.peek2(Token![!]) {
-            attrs.push(input.call(single_parse_inner)?);
-        }
-        Ok(())
-    }
-
-    fn single_parse_inner(input: ParseStream) -> Result<Attribute> {
-        let content;
-        Ok(Attribute {
-            pound_token: input.parse()?,
-            style: AttrStyle::Inner(input.parse()?),
-            bracket_token: bracketed!(content in input),
-            path: content.call(Path::parse_mod_style)?,
-            tokens: content.parse()?,
         })
     }
 }
@@ -368,7 +370,13 @@ mod printing {
             }
             self.ty.to_tokens(tokens);
 
-            // Note: we deliberately ignore self.assign here
+            if let Some(ref assign) = self.assign {
+                emit_error!(
+                    assign.0,
+                    "default value on `struct` field in output";
+                    help = "did you mean to use the `#[impl_default]` attribute?",
+                );
+            }
         }
     }
 }

@@ -110,9 +110,9 @@ mod scope;
 /// ### Type-level initialiser
 ///
 /// ```
-/// # use impl_tools::default;
+/// # use impl_tools::impl_default;
 /// /// A simple enum; default value is Blue
-/// #[default(Colour::Blue)]
+/// #[impl_default(Colour::Blue)]
 /// enum Colour {
 ///     Red,
 ///     Green,
@@ -131,12 +131,15 @@ mod scope;
 /// `Defualt::default()`.
 ///
 /// ```
-/// # use impl_tools::Default;
-/// #[default]
-/// struct Person {
-///     name: String = "Jane Doe",
-///     age: u32 = 72,
-///     occupation: String,
+/// # use impl_tools::{impl_default, impl_scope};
+///
+/// impl_scope! {
+///     #[impl_default]
+///     struct Person {
+///         name: String = "Jane Doe".to_string(),
+///         age: u32 = 72,
+///         occupation: String,
+///     }
 /// }
 ///
 /// fn main() {
@@ -148,8 +151,9 @@ mod scope;
 /// ```
 #[proc_macro_attribute]
 #[proc_macro_error]
-pub fn default(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr = parse_macro_input!(attr as default::Attr);
+    let attr_span = attr.span;
     if let Some(expr) = attr.as_expr() {
         let mut toks = item.clone();
         match parse_macro_input!(item as Item) {
@@ -165,7 +169,7 @@ pub fn default(attr: TokenStream, item: TokenStream) -> TokenStream {
             | Item::Union(syn::ItemUnion {
                 ident, generics, ..
             }) => {
-                let impl_: TokenStream = expr.gen(ident, generics).into();
+                let impl_: TokenStream = expr.gen(&ident, &generics).into();
                 toks.extend(std::iter::once(impl_));
             }
             item => {
@@ -177,10 +181,8 @@ pub fn default(attr: TokenStream, item: TokenStream) -> TokenStream {
         };
         toks
     } else {
-        let item = parse_macro_input!(item as default::Struct);
-        let toks = item.gen().into();
-        println!("{toks}");
-        toks
+        emit_error!(attr_span, "invalid use outside of `impl_scope!` macro");
+        item
     }
 }
 
@@ -338,6 +340,8 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Implementation scope
 ///
 /// Supports `impl Self` syntax.
+///
+/// Also supports struct field assignment syntax for `Default`: see [`impl_default`].
 ///
 /// Caveat: `rustfmt` will not format contents (see
 /// [rustfmt#5254](https://github.com/rust-lang/rustfmt/issues/5254)).
