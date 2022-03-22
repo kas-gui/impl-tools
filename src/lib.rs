@@ -66,6 +66,7 @@ use syn::{spanned::Spanned, Item};
 
 mod autoimpl;
 pub(crate) mod generics;
+mod scope;
 
 /// A variant of the standard `derive` macro
 ///
@@ -213,4 +214,39 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
     toks
+}
+
+/// Implementation scope
+///
+/// Does nothing.
+///
+/// Caveat: `rustfmt` will not format contents (see
+/// [rustfmt#5254](https://github.com/rust-lang/rustfmt/issues/5254)).
+///
+/// ## Syntax
+///
+/// > _ImplScope_ :\
+/// > &nbsp;&nbsp; `impl_scope!` `{` _ScopeItem_ _ItemImpl_ * `}`
+/// >
+/// > _ScopeItem_ :\
+/// > &nbsp;&nbsp; _ItemEnum_ | _ItemStruct_ | _ItemType_ | _ItemUnion_
+///
+/// The result looks a little like a module containing a single type definition
+/// plus its implementations, but is injected into the parent module.
+///
+/// ## Example
+///
+/// ```
+/// # use impl_tools::impl_scope;
+/// impl_scope! {
+///     struct SomeStruct;
+/// }
+/// ```
+#[proc_macro_error]
+#[proc_macro]
+pub fn impl_scope(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as scope::Scope);
+    scope::scope(input)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
 }
