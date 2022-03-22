@@ -8,8 +8,8 @@ use quote::quote;
 use syn::punctuated::Punctuated;
 use syn::token::{Brace, Comma, Semi};
 use syn::{
-    Attribute, Fields, FieldsNamed, Generics, Ident, ItemImpl, Result, Token, Type, Variant,
-    Visibility,
+    Attribute, Fields, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Result, Token, Type,
+    Variant, Visibility,
 };
 
 /// Content of items supported by [`Scope`] that are not common to all variants
@@ -49,7 +49,11 @@ pub struct Scope {
 mod parsing {
     use super::*;
     use syn::parse::{Parse, ParseStream};
-    use syn::{braced, token::Paren, Field, WhereClause};
+    use syn::spanned::Spanned;
+    use syn::{
+        braced, bracketed, parse_quote, token::Paren, AttrStyle, Error, Field, Lifetime, Path,
+        TypePath, WhereClause,
+    };
 
     impl Parse for Scope {
         fn parse(input: ParseStream) -> Result<Self> {
@@ -117,7 +121,7 @@ mod parsing {
 
             let mut impls = Vec::new();
             while !input.is_empty() {
-                impls.push(input.parse()?);
+                impls.push(parse_impl(&generics, &ident, input)?);
             }
 
             Ok(Scope {
@@ -130,6 +134,108 @@ mod parsing {
                 impls,
             })
         }
+    }
+
+    fn parse_impl(
+        in_generics: &Generics,
+        in_ident: &Ident,
+        input: ParseStream,
+    ) -> Result<ItemImpl> {
+        let mut attrs = input.call(Attribute::parse_outer)?;
+        let defaultness: Option<Token![default]> = input.parse()?;
+        let unsafety: Option<Token![unsafe]> = input.parse()?;
+        let impl_token: Token![impl] = input.parse()?;
+
+        let has_generics = input.peek(Token![<])
+            && (input.peek2(Token![>])
+                || input.peek2(Token![#])
+                || (input.peek2(Ident) || input.peek2(Lifetime))
+                    && (input.peek3(Token![:])
+                        || input.peek3(Token![,])
+                        || input.peek3(Token![>])
+                        || input.peek3(Token![=]))
+                || input.peek2(Token![const]));
+        let mut generics: Generics = if has_generics {
+            input.parse()?
+        } else {
+            Generics::default()
+        };
+
+        let mut first_ty: Type = input.parse()?;
+        let mut self_ty: Type;
+        let trait_;
+
+        let is_impl_for = input.peek(Token![for]);
+        if is_impl_for {
+            let for_token: Token![for] = input.parse()?;
+            let mut first_ty_ref = &first_ty;
+            while let Type::Group(ty) = first_ty_ref {
+                first_ty_ref = &ty.elem;
+            }
+            if let Type::Path(_) = first_ty_ref {
+                while let Type::Group(ty) = first_ty {
+                    first_ty = *ty.elem;
+                }
+                if let Type::Path(TypePath { qself: None, path }) = first_ty {
+                    trait_ = Some((None, path, for_token));
+                } else {
+                    unreachable!();
+                }
+            } else {
+                return Err(Error::new(for_token.span, "for without target trait"));
+            }
+            self_ty = input.parse()?;
+        } else {
+            trait_ = None;
+            self_ty = first_ty;
+        }
+
+        generics.where_clause = input.parse()?;
+
+        if self_ty == parse_quote! { Self } {
+            let (_, ty_generics, _) = in_generics.split_for_impl();
+            self_ty = parse_quote! { #in_ident #ty_generics };
+            extend_generics(&mut generics, in_generics);
+        }
+        if self_ty != parse_quote! { Self } {
+            if !matches!(self_ty, Type::Path(TypePath {
+                qself: None,
+                path: Path {
+                    leading_colon: None,
+                    ref segments,
+                }
+            }) if segments.len() == 1 && segments.first().unwrap().ident == *in_ident)
+            {
+                return Err(Error::new(
+                    self_ty.span(),
+                    format!(
+                        "expected `Self` or `{0}` or `{0}<...>` or `Trait for Self`, etc",
+                        in_ident
+                    ),
+                ));
+            }
+        }
+
+        let content;
+        let brace_token = braced!(content in input);
+        parse_attrs_inner(&content, &mut attrs)?;
+
+        let mut items = Vec::new();
+        while !content.is_empty() {
+            items.push(content.parse()?);
+        }
+
+        Ok(ItemImpl {
+            attrs,
+            defaultness,
+            unsafety,
+            impl_token,
+            generics,
+            trait_,
+            self_ty: Box::new(self_ty),
+            brace_token,
+            items,
+        })
     }
 
     pub fn data_struct(
@@ -192,6 +298,25 @@ mod parsing {
         let named = content.parse_terminated(Field::parse_named)?;
         Ok(FieldsNamed { brace_token, named })
     }
+
+    fn parse_attrs_inner(input: ParseStream, attrs: &mut Vec<Attribute>) -> Result<()> {
+        while input.peek(Token![#]) && input.peek2(Token![!]) {
+            let pound_token = input.parse()?;
+            let style = AttrStyle::Inner(input.parse()?);
+            let content;
+            let bracket_token = bracketed!(content in input);
+            let path = content.call(Path::parse_mod_style)?;
+            let tokens = content.parse()?;
+            attrs.push(Attribute {
+                pound_token,
+                style,
+                bracket_token,
+                path,
+                tokens,
+            });
+        }
+        Ok(())
+    }
 }
 
 mod printing {
@@ -248,6 +373,55 @@ mod printing {
 
             tokens.append_all(self.impls.iter());
         }
+    }
+}
+
+// Support impls on Self by replacing name and summing generics
+fn extend_generics(generics: &mut Generics, in_generics: &Generics) {
+    if generics.lt_token.is_none() {
+        debug_assert!(generics.params.is_empty());
+        debug_assert!(generics.gt_token.is_none());
+        generics.lt_token = in_generics.lt_token;
+        generics.params = in_generics.params.clone();
+        generics.gt_token = in_generics.gt_token;
+    } else if in_generics.lt_token.is_none() {
+        debug_assert!(in_generics.params.is_empty());
+        debug_assert!(in_generics.gt_token.is_none());
+    } else {
+        if !generics.params.empty_or_trailing() {
+            generics.params.push_punct(Default::default());
+        }
+        generics
+            .params
+            .extend(in_generics.params.clone().into_pairs());
+    }
+
+    // Strip defaults which are legal on the struct but not on impls
+    for param in &mut generics.params {
+        match param {
+            GenericParam::Type(p) => {
+                p.eq_token = None;
+                p.default = None;
+            }
+            GenericParam::Lifetime(_) => (),
+            GenericParam::Const(p) => {
+                p.eq_token = None;
+                p.default = None;
+            }
+        }
+    }
+
+    if let Some(ref mut clause1) = generics.where_clause {
+        if let Some(ref clause2) = in_generics.where_clause {
+            if !clause1.predicates.empty_or_trailing() {
+                clause1.predicates.push_punct(Default::default());
+            }
+            clause1
+                .predicates
+                .extend(clause2.predicates.clone().into_pairs());
+        }
+    } else {
+        generics.where_clause = in_generics.where_clause.clone();
     }
 }
 

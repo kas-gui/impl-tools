@@ -15,11 +15,11 @@
 //! -   generic re-implementations for traits
 //!
 //! ```
-//! # use impl_tools::autoimpl;
-//! # use std::fmt::Debug;
+//! use impl_tools::autoimpl;
+//! use std::fmt::Debug;
 //!
 //! #[autoimpl(for<'a, T: trait + ?Sized> Box<T>)]
-//! // Generates: impl<'a, T: trait + ?Sized> Animal for Box<T> { .. }
+//! // Generates: impl<'a, T: Animal + ?Sized> Animal for Box<T> { .. }
 //! trait Animal {
 //!     fn number_of_legs(&self) -> u32;
 //! }
@@ -51,6 +51,38 @@
 //!         format!("{my_fish:?} has {} legs!", my_fish.number_of_legs()),
 //!         r#"Named { name: "Nemo", .. } has 0 legs!"#
 //!     );
+//! }
+//! ```
+//!
+//! ## Impl Scope
+//!
+//! `impl_scope!` is a function-like macro used to define a type plus its
+//! implementations. It supports `impl Self` syntax:
+//!
+//! ```
+//! use impl_tools::impl_scope;
+//! use std::fmt::Display;
+//!
+//! impl_scope! {
+//!     /// I don't know why this exists
+//!     pub struct NamedThing<T: Display, F> {
+//!         name: T,
+//!         func: F,
+//!     }
+//!
+//!     // Repeats generic parameters of type
+//!     impl Self {
+//!         fn format_name(&self) -> String {
+//!             format!("{}", self.name)
+//!         }
+//!     }
+//!
+//!     // Merges generic parameters of type
+//!     impl<O> Self where F: Fn(&str) -> O {
+//!         fn invoke(&self) -> O {
+//!             (self.func)(&self.format_name())
+//!         }
+//!     }
 //! }
 //! ```
 
@@ -218,7 +250,7 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Implementation scope
 ///
-/// Does nothing.
+/// Supports `impl Self` syntax.
 ///
 /// Caveat: `rustfmt` will not format contents (see
 /// [rustfmt#5254](https://github.com/rust-lang/rustfmt/issues/5254)).
@@ -234,12 +266,41 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// The result looks a little like a module containing a single type definition
 /// plus its implementations, but is injected into the parent module.
 ///
+/// Implementations must target the type defined at the start of the scope. A
+/// special syntax for the target type, `Self`, is added:
+///
+/// > _ScopeImplItem_ :\
+/// > &nbsp;&nbsp; `impl` _GenericParams_? _ForTrait_? _ScopeImplTarget_ _WhereClause_? `{`
+/// > &nbsp;&nbsp; &nbsp;&nbsp; _InnerAttribute_*
+/// > &nbsp;&nbsp; &nbsp;&nbsp; _AssociatedItem_*
+/// > &nbsp;&nbsp; `}`
+/// >
+/// > _ScopeImplTarget_ :\
+/// > &nbsp;&nbsp; `Self` | _TypeName_ _GenericParams_?
+///
+/// That is, implementations may take one of two forms:
+///
+/// -   `impl MyType { ... }`
+/// -   `impl Self { ... }`
+///
+/// Generic parameters from the type are included automatically, with bounds as
+/// defined on the type. Additional generic parameters and an additional where
+/// clause are supported (generic parameter lists and bounds are merged).
+///
 /// ## Example
 ///
 /// ```
-/// # use impl_tools::impl_scope;
+/// use impl_tools::impl_scope;
+/// use std::ops::Add;
+///
 /// impl_scope! {
-///     struct SomeStruct;
+///     struct Pair<T>(T, T);
+///
+///     impl Self where T: Clone + Add {
+///         fn sum(&self) -> <T as Add>::Output {
+///             self.0.clone().add(self.1.clone())
+///         }
+///     }
 /// }
 /// ```
 #[proc_macro_error]
