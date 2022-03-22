@@ -17,11 +17,11 @@ Macros
 -   generic re-implementations for traits
 
 ```rust
-# use impl_tools::autoimpl;
-# use std::fmt::Debug;
+use impl_tools::autoimpl;
+use std::fmt::Debug;
 
 #[autoimpl(for<'a, T: trait + ?Sized> Box<T>)]
-// Generates: impl<'a, T: trait + ?Sized> Animal for Box<T> { .. }
+// Generates: impl<'a, T: Animal + ?Sized> Animal for Box<T> { .. }
 trait Animal {
     fn number_of_legs(&self) -> u32;
 }
@@ -53,6 +53,38 @@ fn main() {
         format!("{my_fish:?} has {} legs!", my_fish.number_of_legs()),
         r#"Named { name: "Nemo", .. } has 0 legs!"#
     );
+}
+```
+
+### Impl Scope
+
+`impl_scope!` is a function-like macro used to define a type plus its
+implementations. It supports `impl Self` syntax:
+
+```rust
+use impl_tools::impl_scope;
+use std::fmt::Display;
+
+impl_scope! {
+    /// I don't know why this exists
+    pub struct NamedThing<T: Display, F> {
+        name: T,
+        func: F,
+    }
+
+    // Repeats generic parameters of type
+    impl Self {
+        fn format_name(&self) -> String {
+            format!("{}", self.name)
+        }
+    }
+
+    // Merges generic parameters of type
+    impl<O> Self where F: Fn(&str) -> O {
+        fn invoke(&self) -> O {
+            (self.func)(&self.format_name())
+        }
+    }
 }
 ```
 
