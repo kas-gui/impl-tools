@@ -196,24 +196,21 @@ mod parsing {
             let (_, ty_generics, _) = in_generics.split_for_impl();
             self_ty = parse_quote! { #in_ident #ty_generics };
             extend_generics(&mut generics, in_generics);
-        }
-        if self_ty != parse_quote! { Self } {
-            if !matches!(self_ty, Type::Path(TypePath {
+        } else if !matches!(self_ty, Type::Path(TypePath {
                 qself: None,
                 path: Path {
                     leading_colon: None,
                     ref segments,
                 }
             }) if segments.len() == 1 && segments.first().unwrap().ident == *in_ident)
-            {
-                return Err(Error::new(
-                    self_ty.span(),
-                    format!(
-                        "expected `Self` or `{0}` or `{0}<...>` or `Trait for Self`, etc",
-                        in_ident
-                    ),
-                ));
-            }
+        {
+            return Err(Error::new(
+                self_ty.span(),
+                format!(
+                    "expected `Self` or `{0}` or `{0}<...>` or `Trait for Self`, etc",
+                    in_ident
+                ),
+            ));
         }
 
         let content;
