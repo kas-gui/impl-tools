@@ -115,7 +115,7 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 use proc_macro_error::{emit_call_site_error, emit_error, proc_macro_error};
 use syn::parse_macro_input;
-use syn::{spanned::Spanned, Item};
+use syn::Item;
 
 mod autoimpl;
 mod default;
@@ -193,7 +193,7 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
             item => {
                 emit_error!(
-                    item.span(),
+                    item,
                     "default: only supports enum, struct, type alias and union items"
                 );
             }
@@ -339,10 +339,7 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
                 Item::Struct(item) => autoimpl::autoimpl_struct(attr, item),
                 Item::Trait(item) => autoimpl::autoimpl_trait(attr, item),
                 item => {
-                    emit_error!(
-                        item.span(),
-                        "autoimpl: only supports struct and trait items"
-                    );
+                    emit_error!(item, "autoimpl: only supports struct and trait items");
                     return toks;
                 }
             }));

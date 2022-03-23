@@ -12,7 +12,6 @@ use proc_macro_error::{emit_call_site_error, emit_error};
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
-use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{
     Field, Fields, FnArg, Ident, ItemStruct, ItemTrait, Member, Path, PathArguments, Token,
@@ -244,7 +243,7 @@ impl Parse for AutoImpl {
             let ignore: kw::ignore = input.parse()?;
             if matches!(mode, Mode::Default) {
                 emit_error!(
-                    ignore.span(),
+                    ignore,
                     "cannot ignore fields when implementing std::default::Default"
                 );
             }
@@ -342,10 +341,10 @@ pub fn autoimpl_trait(mut attr: AutoImpl, item: ItemTrait) -> TokenStream {
                             });
                         }
                         TraitItem::Macro(item) => {
-                            emit_error!(item.span(), "unsupported: macro item in trait");
+                            emit_error!(item, "unsupported: macro item in trait");
                         }
                         TraitItem::Verbatim(item) => {
-                            emit_error!(item.span(), "unsupported: verbatim item in trait");
+                            emit_error!(item, "unsupported: verbatim item in trait");
                         }
 
                         #[cfg(test)]
@@ -386,7 +385,7 @@ pub fn autoimpl_struct(attr: AutoImpl, item: ItemStruct) -> TokenStream {
             }
             _ => (),
         }
-        emit_error!(mem.span(), "not a struct field");
+        emit_error!(mem, "not a struct field");
     }
     match &attr.body {
         Body::For { .. } => {
