@@ -143,6 +143,8 @@ mod scope;
 /// }
 /// ```
 ///
+/// A where clause is optional: `#[impl_default(EXPR where BOUNDS)]`.
+///
 /// ### Field-level initialiser
 ///
 /// This variant only supports structs. Fields specified as `name: type = expr`
@@ -168,12 +170,14 @@ mod scope;
 ///     assert_eq!(person.occupation, "");
 /// }
 /// ```
+///
+/// A where clause is optional: `#[impl_default(where BOUNDS)]`.
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr = parse_macro_input!(attr as default::Attr);
     let attr_span = attr.span;
-    if let Some(expr) = attr.as_expr() {
+    if attr.expr.is_some() {
         let mut toks = item.clone();
         match parse_macro_input!(item as Item) {
             Item::Enum(syn::ItemEnum {
@@ -188,7 +192,7 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
             | Item::Union(syn::ItemUnion {
                 ident, generics, ..
             }) => {
-                let impl_: TokenStream = expr.gen(&ident, &generics).into();
+                let impl_: TokenStream = attr.gen_expr(&ident, &generics).into();
                 toks.extend(std::iter::once(impl_));
             }
             item => {
@@ -238,7 +242,7 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     initialised with `Default::default()`
 /// -   `Debug` — implements `std::fmt::Debug`; ignored fields are not printed
 /// -   `Default` — implements `std::default::Default` using
-///     `Default::default()` for all fields (see also [`impl_default`])
+///     `Default::default()` for all fields (see also [`impl_default`](macro@impl_default))
 ///
 /// ### Parameter syntax
 ///
@@ -358,7 +362,7 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// Supports `impl Self` syntax.
 ///
-/// Also supports struct field assignment syntax for `Default`: see [`impl_default`].
+/// Also supports struct field assignment syntax for `Default`: see [`impl_default`](macro@impl_default).
 ///
 /// Caveat: `rustfmt` will not format contents (see
 /// [rustfmt#5254](https://github.com/rust-lang/rustfmt/issues/5254)).
