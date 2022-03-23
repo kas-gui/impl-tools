@@ -98,16 +98,6 @@ impl AsExpr {
     }
 }
 
-pub struct Struct {
-    attrs: Vec<Attribute>,
-    vis: Visibility,
-    struct_token: Token![struct],
-    ident: Ident,
-    generics: Generics,
-    fields: Fields,
-    semi_token: Option<Token![;]>,
-}
-
 #[derive(Debug)]
 pub enum Fields {
     Named(FieldsNamed),
@@ -142,29 +132,6 @@ pub(crate) mod parsing {
     use super::*;
     use syn::ext::IdentExt;
     use syn::{braced, parenthesized, WhereClause};
-
-    impl Parse for Struct {
-        fn parse(input: ParseStream) -> Result<Self> {
-            let attrs = input.call(Attribute::parse_outer)?;
-            let vis = input.parse::<Visibility>()?;
-            let struct_token = input.parse::<Token![struct]>()?;
-            let ident = input.parse::<Ident>()?;
-            let generics = input.parse::<Generics>()?;
-            let (where_clause, fields, semi_token) = parsing::data_struct(input)?;
-            Ok(Struct {
-                attrs,
-                vis,
-                struct_token,
-                ident,
-                generics: Generics {
-                    where_clause,
-                    ..generics
-                },
-                fields,
-                semi_token,
-            })
-        }
-    }
 
     impl Parse for FieldsNamed {
         fn parse(input: ParseStream) -> Result<Self> {
@@ -316,31 +283,6 @@ mod printing {
                 }
             }
             self.iter().filter(is_inner)
-        }
-    }
-
-    impl ToTokens for Struct {
-        fn to_tokens(&self, tokens: &mut TokenStream) {
-            tokens.append_all(self.attrs.outer());
-            self.vis.to_tokens(tokens);
-            self.struct_token.to_tokens(tokens);
-            self.ident.to_tokens(tokens);
-            self.generics.to_tokens(tokens);
-            match &self.fields {
-                Fields::Named(fields) => {
-                    self.generics.where_clause.to_tokens(tokens);
-                    fields.to_tokens(tokens);
-                }
-                Fields::Unnamed(fields) => {
-                    fields.to_tokens(tokens);
-                    self.generics.where_clause.to_tokens(tokens);
-                    TokensOrDefault(&self.semi_token).to_tokens(tokens);
-                }
-                Fields::Unit => {
-                    self.generics.where_clause.to_tokens(tokens);
-                    TokensOrDefault(&self.semi_token).to_tokens(tokens);
-                }
-            }
         }
     }
 
