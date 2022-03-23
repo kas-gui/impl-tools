@@ -15,7 +15,7 @@ fn lr() {
 }
 
 impl_scope! {
-    #[impl_default UnsafeNumber { as_u64: 0 }]
+    #[impl_default(UnsafeNumber { as_u64: 0 })]
     union UnsafeNumber {
         as_u64: u64,
         as_f64: f64,

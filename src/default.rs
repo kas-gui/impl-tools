@@ -11,8 +11,9 @@ use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{token, Attribute, Expr, Generics, Ident, Token, Type, Visibility};
 
-pub fn impl_default(attr: TokenStream, scope: &mut Scope) -> Result<()> {
+pub fn impl_default(attr: TokenStream, attr_span: Span, scope: &mut Scope) -> Result<()> {
     let attr: Attr = syn::parse2(attr)?;
+
     if let Some(expr) = attr.as_expr() {
         scope
             .generated
@@ -36,7 +37,7 @@ pub fn impl_default(attr: TokenStream, scope: &mut Scope) -> Result<()> {
             },
             _ => {
                 return Err(Error::new(
-                    scope.item.token_span(),
+                    attr_span,
                     "must specify value as `#[impl_default(value)]` on non-struct type",
                 ));
             }
