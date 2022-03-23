@@ -11,8 +11,8 @@ use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Brace, Comma, Semi};
 use syn::{
-    parse_quote, Attribute, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Result, Token,
-    Type, Variant, Visibility,
+    Attribute, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Path, Result, Token, Type,
+    Variant, Visibility,
 };
 
 /// Content of items supported by [`Scope`] that are not common to all variants
@@ -61,37 +61,65 @@ pub struct Scope {
     pub generated: Vec<TokenStream>,
 }
 
+pub type ApplyAttrFn = fn(TokenStream, Span, &mut Scope) -> Result<()>;
+pub const SCOPE_ATTRS: [(&'static [&'static str], ApplyAttrFn); 1] =
+    [(&["impl_default"], impl_default)];
+
 impl Scope {
     pub fn apply_attrs(&mut self) {
+        fn matches(p: &Path, mut q: &[&str]) -> bool {
+            assert!(!q.is_empty());
+            if p.leading_colon.is_some() {
+                if !q[0].is_empty() {
+                    return false;
+                }
+                q = &q[1..];
+            }
+
+            if p.segments.len() != q.len() {
+                return false;
+            }
+
+            for (x, y) in p.segments.iter().zip(q.iter()) {
+                if x.ident != y || !x.arguments.is_empty() {
+                    return false;
+                }
+            }
+
+            true
+        }
+
         let mut i = 0;
         while i < self.attrs.len() {
-            if self.attrs[i].path == parse_quote! { impl_default } {
-                let attr = self.attrs.remove(i);
-                let span = attr.span();
+            for j in 0..SCOPE_ATTRS.len() {
+                if matches(&self.attrs[i].path, SCOPE_ATTRS[j].0) {
+                    let attr = self.attrs.remove(i);
+                    let span = attr.span();
 
-                // Emulate #[proc_macro]: attr must contain 0 or 1 group
-                let mut iter = attr.tokens.into_iter();
-                let mut tokens = TokenStream::new();
-                if let Some(tree) = iter.next() {
-                    match tree {
-                        TokenTree::Group(group) if group.delimiter() != Delimiter::None => {
-                            tokens = group.stream();
-                        }
-                        _ => {
-                            emit_error!(tree, "expected one of `(`, `::`, `[`, `]`, or `{`");
-                            continue;
+                    // Emulate #[proc_macro]: attr must contain 0 or 1 group
+                    let mut iter = attr.tokens.into_iter();
+                    let mut tokens = TokenStream::new();
+                    if let Some(tree) = iter.next() {
+                        match tree {
+                            TokenTree::Group(group) if group.delimiter() != Delimiter::None => {
+                                tokens = group.stream();
+                            }
+                            _ => {
+                                emit_error!(tree, "expected one of `(`, `::`, `[`, `]`, or `{`");
+                                continue;
+                            }
                         }
                     }
-                }
-                if let Some(tree) = iter.next() {
-                    emit_error!(tree, "expected `]`");
+                    if let Some(tree) = iter.next() {
+                        emit_error!(tree, "expected `]`");
+                        continue;
+                    }
+
+                    if let Err(err) = (SCOPE_ATTRS[j].1)(tokens, span, self) {
+                        emit_error!(err.span(), "{}", err);
+                    }
                     continue;
                 }
-
-                if let Err(err) = impl_default(tokens, span, self) {
-                    emit_error!(err.span(), "{}", err);
-                }
-                continue;
             }
 
             i += 1;
