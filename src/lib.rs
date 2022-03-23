@@ -56,6 +56,25 @@
 //! }
 //! ```
 //!
+//! ## Derive Default
+//!
+//! `#[impl_default]` implements `std::default::Default`:
+//!
+//! ```
+//! use impl_tools::{impl_default, impl_scope};
+//!
+//! #[impl_default(Tree::Ash)]
+//! enum Tree { Ash, Beech, Birch, Willow }
+//!
+//! impl_scope! {
+//!     #[impl_default]
+//!     struct Copse {
+//!         tree_type: Tree,
+//!         number: u32 = 7,
+//!     }
+//! }
+//! ```
+//!
 //! ## Impl Scope
 //!
 //! `impl_scope!` is a function-like macro used to define a type plus its
