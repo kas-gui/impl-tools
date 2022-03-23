@@ -56,6 +56,25 @@ fn main() {
 }
 ```
 
+## Impl Default
+
+`#[impl_default]` implements `std::default::Default`:
+
+```rust
+use impl_tools::{impl_default, impl_scope};
+
+#[impl_default(Tree::Ash)]
+enum Tree { Ash, Beech, Birch, Willow }
+
+impl_scope! {
+    #[impl_default]
+    struct Copse {
+        tree_type: Tree,
+        number: u32 = 7,
+    }
+}
+```
+
 ### Impl Scope
 
 `impl_scope!` is a function-like macro used to define a type plus its
@@ -89,10 +108,12 @@ impl_scope! {
 ```
 
 
-Minimum Supported Rust Version
+Supported Rust Versions
 ------------------------------
 
 The MSRV is 1.56.0 (first to support Edition 2021).
+
+Using a nightly compiler will improve diagnostics.
 
 
 Copyright and Licence

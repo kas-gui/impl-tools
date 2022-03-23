@@ -56,6 +56,25 @@
 //! }
 //! ```
 //!
+//! ## Derive Default
+//!
+//! `#[impl_default]` implements `std::default::Default`:
+//!
+//! ```
+//! use impl_tools::{impl_default, impl_scope};
+//!
+//! #[impl_default(Tree::Ash)]
+//! enum Tree { Ash, Beech, Birch, Willow }
+//!
+//! impl_scope! {
+//!     #[impl_default]
+//!     struct Copse {
+//!         tree_type: Tree,
+//!         number: u32 = 7,
+//!     }
+//! }
+//! ```
+//!
 //! ## Impl Scope
 //!
 //! `impl_scope!` is a function-like macro used to define a type plus its
@@ -99,8 +118,92 @@ use syn::parse_macro_input;
 use syn::{spanned::Spanned, Item};
 
 mod autoimpl;
+mod default;
 pub(crate) mod generics;
 mod scope;
+
+/// Implement `Default`
+///
+/// This macro may be used in one of two ways.
+///
+/// ### Type-level initialiser
+///
+/// ```
+/// # use impl_tools::impl_default;
+/// /// A simple enum; default value is Blue
+/// #[impl_default(Colour::Blue)]
+/// enum Colour {
+///     Red,
+///     Green,
+///     Blue,
+/// }
+///
+/// fn main() {
+///     assert!(matches!(Colour::default(), Colour::Blue));
+/// }
+/// ```
+///
+/// ### Field-level initialiser
+///
+/// This variant only supports structs. Fields specified as `name: type = expr`
+/// will be initialised with `expr`, while other fields will be initialised with
+/// `Defualt::default()`.
+///
+/// ```
+/// # use impl_tools::{impl_default, impl_scope};
+///
+/// impl_scope! {
+///     #[impl_default]
+///     struct Person {
+///         name: String = "Jane Doe".to_string(),
+///         age: u32 = 72,
+///         occupation: String,
+///     }
+/// }
+///
+/// fn main() {
+///     let person = Person::default();
+///     assert_eq!(person.name, "Jane Doe");
+///     assert_eq!(person.age, 72);
+///     assert_eq!(person.occupation, "");
+/// }
+/// ```
+#[proc_macro_attribute]
+#[proc_macro_error]
+pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let attr = parse_macro_input!(attr as default::Attr);
+    let attr_span = attr.span;
+    if let Some(expr) = attr.as_expr() {
+        let mut toks = item.clone();
+        match parse_macro_input!(item as Item) {
+            Item::Enum(syn::ItemEnum {
+                ident, generics, ..
+            })
+            | Item::Struct(syn::ItemStruct {
+                ident, generics, ..
+            })
+            | Item::Type(syn::ItemType {
+                ident, generics, ..
+            })
+            | Item::Union(syn::ItemUnion {
+                ident, generics, ..
+            }) => {
+                let impl_: TokenStream = expr.gen(&ident, &generics).into();
+                toks.extend(std::iter::once(impl_));
+            }
+            item => {
+                emit_error!(
+                    item.span(),
+                    "default: only supports enum, struct, type alias and union items"
+                );
+            }
+        };
+        toks
+    } else {
+        emit_error!(attr_span, "invalid use outside of `impl_scope!` macro");
+        item
+    }
+}
 
 /// A variant of the standard `derive` macro
 ///
@@ -236,7 +339,10 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
                 Item::Struct(item) => autoimpl::autoimpl_struct(attr, item),
                 Item::Trait(item) => autoimpl::autoimpl_trait(attr, item),
                 item => {
-                    emit_error!(item.span(), "autoimpl: does not support this item type");
+                    emit_error!(
+                        item.span(),
+                        "autoimpl: only supports struct and trait items"
+                    );
                     return toks;
                 }
             }));
@@ -253,6 +359,8 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Implementation scope
 ///
 /// Supports `impl Self` syntax.
+///
+/// Also supports struct field assignment syntax for `Default`: see [`impl_default`].
 ///
 /// Caveat: `rustfmt` will not format contents (see
 /// [rustfmt#5254](https://github.com/rust-lang/rustfmt/issues/5254)).
