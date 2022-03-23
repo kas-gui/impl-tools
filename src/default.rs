@@ -77,6 +77,7 @@ impl Parse for Attr {
 }
 
 impl Attr {
+    #[allow(clippy::wrong_self_convention)]
     pub fn as_expr(self) -> Option<AsExpr> {
         self.expr.map(AsExpr)
     }
@@ -136,8 +137,9 @@ pub(crate) mod parsing {
     impl Parse for FieldsNamed {
         fn parse(input: ParseStream) -> Result<Self> {
             let content;
+            let brace_token = braced!(content in input);
             Ok(FieldsNamed {
-                brace_token: braced!(content in input),
+                brace_token,
                 fields: content.parse_terminated(Field::parse_named)?,
             })
         }
@@ -146,8 +148,9 @@ pub(crate) mod parsing {
     impl Parse for FieldsUnnamed {
         fn parse(input: ParseStream) -> Result<Self> {
             let content;
+            let paren_token = parenthesized!(content in input);
             Ok(FieldsUnnamed {
-                paren_token: parenthesized!(content in input),
+                paren_token,
                 fields: content.parse_terminated(Field::parse_unnamed)?,
             })
         }
