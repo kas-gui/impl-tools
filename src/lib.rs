@@ -237,7 +237,8 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// -   `Clone` — implements `std::clone::Clone`; ignored fields are
 ///     initialised with `Default::default()`
 /// -   `Debug` — implements `std::fmt::Debug`; ignored fields are not printed
-/// -   `Default` — implements `std::default::Default`
+/// -   `Default` — implements `std::default::Default` using
+///     `Default::default()` for all fields (see also [`impl_default`])
 ///
 /// ### Parameter syntax
 ///
