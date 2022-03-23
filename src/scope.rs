@@ -4,9 +4,11 @@
 //     https://www.apache.org/licenses/LICENSE-2.0
 
 use crate::default::{impl_default, Fields};
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
+use proc_macro_error::emit_error;
 use quote::quote;
 use syn::punctuated::Punctuated;
+use syn::spanned::Spanned;
 use syn::token::{Brace, Comma, Semi};
 use syn::{
     parse_quote, Attribute, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Result, Token,
@@ -60,18 +62,40 @@ pub struct Scope {
 }
 
 impl Scope {
-    pub fn apply_attrs(&mut self) -> Result<()> {
+    pub fn apply_attrs(&mut self) {
         let mut i = 0;
         while i < self.attrs.len() {
             if self.attrs[i].path == parse_quote! { impl_default } {
                 let attr = self.attrs.remove(i);
-                impl_default(attr.tokens, self)?;
+                let span = attr.span();
+
+                // Emulate #[proc_macro]: attr must contain 0 or 1 group
+                let mut iter = attr.tokens.into_iter();
+                let mut tokens = TokenStream::new();
+                if let Some(tree) = iter.next() {
+                    match tree {
+                        TokenTree::Group(group) if group.delimiter() != Delimiter::None => {
+                            tokens = group.stream();
+                        }
+                        _ => {
+                            emit_error!(tree, "expected one of `(`, `::`, `[`, `]`, or `{`");
+                            continue;
+                        }
+                    }
+                }
+                if let Some(tree) = iter.next() {
+                    emit_error!(tree, "expected `]`");
+                    continue;
+                }
+
+                if let Err(err) = impl_default(tokens, span, self) {
+                    emit_error!(err.span(), "{}", err);
+                }
                 continue;
             }
 
             i += 1;
         }
-        Ok(())
     }
 }
 
@@ -419,6 +443,6 @@ fn extend_generics(generics: &mut Generics, in_generics: &Generics) {
 }
 
 pub fn scope(mut scope: Scope) -> Result<TokenStream> {
-    scope.apply_attrs()?;
+    scope.apply_attrs();
     Ok(quote! { #scope })
 }

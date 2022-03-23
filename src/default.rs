@@ -3,6 +3,7 @@
 // You may obtain a copy of the License in the LICENSE-APACHE file or at:
 //     https://www.apache.org/licenses/LICENSE-2.0
 
+use crate::generics::{clause_to_toks, WhereClause};
 use crate::scope::{Scope, ScopeItem};
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::emit_error;
@@ -11,12 +12,13 @@ use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{token, Attribute, Expr, Generics, Ident, Token, Type, Visibility};
 
-pub fn impl_default(attr: TokenStream, scope: &mut Scope) -> Result<()> {
+pub fn impl_default(attr: TokenStream, attr_span: Span, scope: &mut Scope) -> Result<()> {
     let attr: Attr = syn::parse2(attr)?;
-    if let Some(expr) = attr.as_expr() {
+
+    if attr.expr.is_some() {
         scope
             .generated
-            .push(expr.gen(&scope.ident, &scope.generics));
+            .push(attr.gen_expr(&scope.ident, &scope.generics));
     } else {
         let fields = match &mut scope.item {
             ScopeItem::Struct { fields, .. } => match fields {
@@ -36,14 +38,19 @@ pub fn impl_default(attr: TokenStream, scope: &mut Scope) -> Result<()> {
             },
             _ => {
                 return Err(Error::new(
-                    scope.item.token_span(),
+                    attr_span,
                     "must specify value as `#[impl_default(value)]` on non-struct type",
                 ));
             }
         };
 
         let ident = &scope.ident;
-        let (impl_generics, ty_generics, wc) = scope.generics.split_for_impl();
+        let (impl_generics, ty_generics, _) = scope.generics.split_for_impl();
+        let wc = clause_to_toks(
+            &attr.where_clause,
+            scope.generics.where_clause.as_ref(),
+            &quote! { Default },
+        );
 
         scope.generated.push(quote! {
             impl #impl_generics std::default::Default for #ident #ty_generics #wc {
@@ -59,35 +66,46 @@ pub fn impl_default(attr: TokenStream, scope: &mut Scope) -> Result<()> {
 }
 
 pub struct Attr {
-    expr: Option<Expr>,
+    pub expr: Option<Expr>,
+    pub where_clause: Option<WhereClause>,
     pub span: Span,
 }
 
 impl Parse for Attr {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut expr = None;
+        let mut where_clause = None;
         let span = input.span();
 
-        if !input.is_empty() {
+        if !input.peek(Token![where]) && !input.is_empty() {
             expr = Some(input.parse()?);
         }
 
-        Ok(Attr { expr, span })
+        if input.peek(Token![where]) {
+            where_clause = Some(input.parse()?);
+        }
+
+        if !input.is_empty() {
+            return Err(Error::new(input.span(), "unexpected"));
+        }
+
+        Ok(Attr {
+            expr,
+            where_clause,
+            span,
+        })
     }
 }
 
 impl Attr {
-    #[allow(clippy::wrong_self_convention)]
-    pub fn as_expr(self) -> Option<AsExpr> {
-        self.expr.map(AsExpr)
-    }
-}
-
-pub struct AsExpr(Expr);
-impl AsExpr {
-    pub fn gen(self, ident: &Ident, generics: &Generics) -> TokenStream {
-        let (impl_generics, ty_generics, wc) = generics.split_for_impl();
-        let expr = self.0;
+    pub fn gen_expr(self, ident: &Ident, generics: &Generics) -> TokenStream {
+        let (impl_generics, ty_generics, _) = generics.split_for_impl();
+        let wc = clause_to_toks(
+            &self.where_clause,
+            generics.where_clause.as_ref(),
+            &quote! { Default },
+        );
+        let expr = self.expr.unwrap();
 
         quote! {
             impl #impl_generics std::default::Default for #ident #ty_generics #wc {
