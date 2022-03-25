@@ -1,6 +1,6 @@
 [package]
 name = "impl-tools"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Diggory Hardy <git@dhardy.name>"]
 edition = "2021"
 license = "MIT/Apache-2.0"
@@ -15,15 +15,17 @@ documentation = "https://docs.rs/impl-tools/"
 proc-macro = true
 
 [dependencies]
-quote = "1.0"
-proc-macro2 = { version = "1.0" }
 proc-macro-error = "1.0"
 
 [dependencies.syn]
 version = "1.0.14"
-# We need 'extra-traits' for equality testing
-# We need 'full' for parsing macros within macro arguments
-features = ["extra-traits", "full"]
+
+[dependencies.impl-tools-lib]
+version = "0.3.0"
+path = "lib"
 
 [dev-dependencies]
 doc-comment = "0.3.3"
+
+[workspace]
+members = ["lib"]

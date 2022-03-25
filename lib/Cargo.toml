@@ -1,0 +1,22 @@
+[package]
+name = "impl-tools-lib"
+version = "0.3.0"
+authors = ["Diggory Hardy <git@dhardy.name>"]
+edition = "2021"
+license = "MIT/Apache-2.0"
+description = "Helper macros: autoimpl"
+keywords = ["derive", "trait"]
+repository = "https://github.com/kas-gui/impl-tools"
+readme = "README.md"
+documentation = "https://docs.rs/impl-tools-lib/"
+
+[dependencies]
+quote = "1.0"
+proc-macro2 = { version = "1.0" }
+proc-macro-error = "1.0"
+
+[dependencies.syn]
+version = "1.0.14"
+# We need 'extra-traits' for equality testing
+# We need 'full' for parsing macros within macro arguments
+features = ["extra-traits", "full"]

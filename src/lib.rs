@@ -117,10 +117,7 @@ use proc_macro_error::{emit_call_site_error, emit_error, proc_macro_error};
 use syn::parse_macro_input;
 use syn::Item;
 
-mod autoimpl;
-mod default;
-pub(crate) mod generics;
-mod scope;
+use impl_tools_lib::{autoimpl, default, scope};
 
 /// Implement `Default`
 ///
