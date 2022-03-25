@@ -15,33 +15,70 @@ use syn::{
     Variant, Visibility,
 };
 
+/// Function type of [`ScopeAttr`] rule
+///
+/// Function takes arguments:
+///
+/// -   [`TokenStream`]: attribute arguments. As with `#[proc_macro_attribute]`
+///     macros, this is either empty or the contents of a single grouping token
+///     (`()`, `{}` or `[]`).
+/// -   [`Span`]: the span of the whole attribute. Note that [`Span::call_site`]
+///     will return the span of the whole `impl_scope!` macro call. Use this
+///     instead when reporting errors on the attribute.
+/// -   `&mut` [`Scope`]: mutable reference to the implementation scope. Usually
+///     an attribute rule function will read data from the scope and append its
+///     output to [`Scope::generated`].
 pub type ScopeAttrFn = fn(TokenStream, Span, &mut Scope) -> Result<()>;
+
+/// Attribute rule for [`Scope`]
+///
+/// Rules are matched via a path, e.g. `&["foo"]` matches `foo` and
+/// `&["", "foo", "bar"]` matches `::foo::bar`.
+///
+/// Such rules are used to expand attributes within an `impl_scope!`.
 pub type ScopeAttr = (&'static [&'static str], ScopeAttrFn);
 
 /// Content of items supported by [`Scope`] that are not common to all variants
 #[derive(Debug)]
 pub enum ScopeItem {
+    /// A [`syn::ItemEnum`], minus common parts
     Enum {
+        /// `enum`
         token: Token![enum],
+        /// `{ ... }`
         brace: Brace,
+        /// Variants of enum
         variants: Punctuated<Variant, Comma>,
     },
+    /// A [`syn::ItemStruct`], minus common parts
+    ///
+    /// Uses custom [`Fields`], supporting field initializers.
     Struct {
+        /// `struct`
         token: Token![struct],
+        /// Fields of struct
         fields: Fields,
     },
+    /// A [`syn::ItemType`], minus common parts
     Type {
+        /// `type`
         token: Token![type],
+        /// `=`
         eq_token: Token![=],
+        /// Target type
         ty: Box<Type>,
     },
+    /// A [`syn::ItemUnion`], minus common parts
     Union {
+        /// `union`
         token: Token![union],
+        /// Fields of union
         fields: FieldsNamed,
     },
 }
 
 impl ScopeItem {
+    /// Take span of `enum`/`struct`/`type`/`union` token
     pub fn token_span(&self) -> Span {
         match self {
             ScopeItem::Enum { token, .. } => token.span,
@@ -52,22 +89,48 @@ impl ScopeItem {
     }
 }
 
+/// Contents of `impl_scope!`
+///
+/// `impl_scope!` input consists of one item (an `enum`, `struct`, `type` alias
+/// or `union`) followed by any number of implementations, and is parsed into
+/// this struct.
+///
+/// On its own, `impl_scope!` provides `impl Self` syntax: generics of the type
+/// are attached to the implementation automatically.
+///
+/// The secondary utility of `impl_scope!` is to allow attribute expansion
+/// within itself via [`ScopeAttr`] rules. These rules may read the type item
+/// (which may include field initializers in the case of a struct), read
+/// accompanying implementations, and even modify them.
 #[derive(Debug)]
 pub struct Scope {
+    /// Outer attributes on the item
     pub attrs: Vec<Attribute>,
+    /// Optional `pub`, etc.
     pub vis: Visibility,
+    /// Item identifier
     pub ident: Ident,
+    /// Item generics
     pub generics: Generics,
+    /// The item
     pub item: ScopeItem,
+    /// Trailing semicolon (type alias and unit struct only)
     pub semi: Option<Semi>,
+    /// Implementation items
     pub impls: Vec<ItemImpl>,
+    /// Output of [`ScopeAttr`] rules
+    ///
+    /// This does not contain any content from input, only content generated
+    /// from [`ScopeAttr`] rules. It is appended to output as an item (usually
+    /// a [`syn::ImplItem`]), after [`Self::impls`] items.
     pub generated: Vec<TokenStream>,
 }
 
 impl Scope {
     /// Apply attribute rules
     ///
-    /// Rules are applied in the order of definition
+    /// The supplied `rules` are applied in the order of definition, and their
+    /// attributes removed from the item.
     pub fn apply_attrs(&mut self, rules: &[ScopeAttr]) {
         fn matches(p: &Path, mut q: &[&str]) -> bool {
             assert!(!q.is_empty());
@@ -128,7 +191,7 @@ impl Scope {
         }
     }
 
-    /// Generate result
+    /// Generate the result
     pub fn generate(self) -> TokenStream {
         quote! { #self }
     }

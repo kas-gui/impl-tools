@@ -80,13 +80,16 @@ enum Body {
     },
 }
 
-/// `#[autoimpl]` attribute
+/// The `#[autoimpl]` attribute
 pub struct AutoImpl {
     body: Body,
 }
 
 impl AutoImpl {
-    /// Expand attribute
+    /// Expand over the given `item`
+    ///
+    /// This attribute does not modify the item.
+    /// The caller should append the result to `item` tokens.
     pub fn expand(self, item: TokenStream) -> TokenStream {
         let item = match parse2::<Item>(item) {
             Ok(item) => item,

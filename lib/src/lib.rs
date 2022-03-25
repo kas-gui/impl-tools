@@ -4,6 +4,12 @@
 //     https://www.apache.org/licenses/LICENSE-2.0
 
 //! # Impl-tools-lib
+//!
+//! To implement the proc-macros, copy and modify the
+//! [`impl-tools`](https://github.com/kas-gui/impl-tools/) crate, which is
+//! merely documentation plus wrappers around this crate.
+
+#![deny(missing_docs)]
 
 mod autoimpl;
 mod default;

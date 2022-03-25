@@ -21,6 +21,9 @@ pub struct ImplDefault {
 
 impl ImplDefault {
     /// Expand over the given `item`
+    ///
+    /// This attribute (in this form of invocation) does not modify the item.
+    /// The caller should append the result to `item` tokens.
     pub fn expand(self, item: TokenStream) -> TokenStream {
         let attr_span = self.span;
         if self.expr.is_some() {
@@ -159,33 +162,62 @@ impl Parse for ImplDefault {
     }
 }
 
+/// Data stored within an enum variant or struct.
+///
+/// This is a variant of [`syn::Fields`] supporting field initializers.
 #[derive(Debug)]
 pub enum Fields {
+    /// Named fields of a struct or struct variant such as `Point { x: f64, y: f64 }`.
     Named(FieldsNamed),
+    /// Unnamed fields of a tuple struct or tuple variant such as `Some(T)`.
     Unnamed(FieldsUnnamed),
+    /// Unit struct or unit variant such as `None`.
     Unit,
 }
 
+/// Named fields of a struct or struct variant such as `Point { x: f64, y: f64 }`.
+///
+/// This is a variant of [`syn::FieldsNamed`] supporting field initializers.
 #[derive(Debug)]
 pub struct FieldsNamed {
-    brace_token: token::Brace,
-    fields: Punctuated<Field, Token![,]>,
+    /// `{ ... }` around fields
+    pub brace_token: token::Brace,
+    /// Fields
+    pub fields: Punctuated<Field, Token![,]>,
 }
 
+/// Unnamed fields of a tuple struct or tuple variant such as `Some(T)`.
+///
+/// This is a variant of [`syn::FieldsUnnamed`] supporting field initializers.
 #[derive(Debug)]
 pub struct FieldsUnnamed {
-    paren_token: token::Paren,
-    fields: Punctuated<Field, Token![,]>,
+    /// `( ... )` around fields
+    pub paren_token: token::Paren,
+    /// Fields
+    pub fields: Punctuated<Field, Token![,]>,
 }
 
+/// A field of a struct or enum variant.
+///
+/// This is a variant of [`syn::Field`] supporting field initializers.
 #[derive(Debug)]
 pub struct Field {
-    attrs: Vec<Attribute>,
-    vis: Visibility,
-    ident: Option<Ident>,
-    colon_token: Option<Token![:]>,
-    ty: Type,
-    assign: Option<(Token![=], Expr)>,
+    /// Attributes tagged on the field.
+    pub attrs: Vec<Attribute>,
+    /// Visibility of the field.
+    pub vis: Visibility,
+    /// Name of the field, if any.
+    pub ident: Option<Ident>,
+    /// `:` token before type
+    pub colon_token: Option<Token![:]>,
+    /// Type of the field.
+    pub ty: Type,
+    /// Optional field initializer.
+    ///
+    /// This is considered legal input when parsing, but not legal output. An
+    /// attribute rule such as [`ATTR_IMPL_DEFAULT`] must remove the initializer
+    /// before output is generated.
+    pub assign: Option<(Token![=], Expr)>,
 }
 
 // Copied from syn, modified
@@ -217,6 +249,7 @@ pub(crate) mod parsing {
     }
 
     impl Field {
+        /// Parse a named field
         pub fn parse_named(input: ParseStream) -> Result<Self> {
             Ok(Field {
                 attrs: input.call(Attribute::parse_outer)?,
@@ -236,6 +269,7 @@ pub(crate) mod parsing {
             })
         }
 
+        /// Parse an unnamed field
         pub fn parse_unnamed(input: ParseStream) -> Result<Self> {
             Ok(Field {
                 attrs: input.call(Attribute::parse_outer)?,
