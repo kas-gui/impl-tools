@@ -13,10 +13,10 @@
 
 mod autoimpl;
 mod default;
+pub mod fields;
 pub mod generics;
 mod scope;
 
 pub use autoimpl::AutoImpl;
-pub use default::{Field, Fields, FieldsNamed, FieldsUnnamed};
 pub use default::{ImplDefault, ATTR_IMPL_DEFAULT};
 pub use scope::{Scope, ScopeAttr, ScopeAttrFn, ScopeItem};

@@ -3,7 +3,7 @@
 // You may obtain a copy of the License in the LICENSE-APACHE file or at:
 //     https://www.apache.org/licenses/LICENSE-2.0
 
-use crate::Fields;
+use crate::fields::Fields;
 use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
 use proc_macro_error::emit_error;
 use quote::quote;
@@ -199,7 +199,7 @@ impl Scope {
 
 mod parsing {
     use super::*;
-    use crate::default::parsing::data_struct;
+    use crate::fields::parsing::data_struct;
     use syn::parse::{Parse, ParseStream};
     use syn::spanned::Spanned;
     use syn::{
