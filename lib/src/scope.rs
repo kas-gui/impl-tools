@@ -15,28 +15,37 @@ use syn::{
     Variant, Visibility,
 };
 
-/// Function type of [`ScopeAttr`] rule
-///
-/// Function takes arguments:
-///
-/// -   [`TokenStream`]: attribute arguments. As with `#[proc_macro_attribute]`
-///     macros, this is either empty or the contents of a single grouping token
-///     (`()`, `{}` or `[]`).
-/// -   [`Span`]: the span of the whole attribute. Note that [`Span::call_site`]
-///     will return the span of the whole `impl_scope!` macro call. Use this
-///     instead when reporting errors on the attribute.
-/// -   `&mut` [`Scope`]: mutable reference to the implementation scope. Usually
-///     an attribute rule function will read data from the scope and append its
-///     output to [`Scope::generated`].
-pub type ScopeAttrFn = fn(TokenStream, Span, &mut Scope) -> Result<()>;
-
 /// Attribute rule for [`Scope`]
 ///
 /// Rules are matched via a path, e.g. `&["foo"]` matches `foo` and
 /// `&["", "foo", "bar"]` matches `::foo::bar`.
 ///
 /// Such rules are used to expand attributes within an `impl_scope!`.
-pub type ScopeAttr = (&'static [&'static str], ScopeAttrFn);
+pub trait ScopeAttr {
+    /// Attribute path
+    ///
+    /// Rules are matched via a path, e.g. `&["foo"]` matches `foo` and
+    /// `&["", "foo", "bar"]` matches `::foo::bar`.
+    ///
+    /// Note that we cannot use standard path resolution, so we match only a
+    /// single path, as defined.
+    fn path(&self) -> &'static [&'static str];
+
+    /// Function type of [`ScopeAttr`] rule
+    ///
+    /// Input arguments:
+    ///
+    /// -   `args`: attribute arguments. As with `#[proc_macro_attribute]`
+    ///     macros, this is either empty or the contents of a single grouping token
+    ///     (`()`, `{}` or `[]`).
+    /// -   `span`: the span of the whole attribute. Note that [`Span::call_site`]
+    ///     will return the span of the whole `impl_scope!` macro call. Use this
+    ///     instead when reporting errors on the attribute.
+    /// -   `scope`: mutable reference to the implementation scope. Usually
+    ///     an attribute rule function will read data from the scope and append its
+    ///     output to [`Scope::generated`].
+    fn apply(&self, args: TokenStream, span: Span, scope: &mut Scope) -> Result<()>;
+}
 
 /// Content of items supported by [`Scope`] that are not common to all variants
 #[derive(Debug)]
@@ -131,7 +140,7 @@ impl Scope {
     ///
     /// The supplied `rules` are applied in the order of definition, and their
     /// attributes removed from the item.
-    pub fn apply_attrs(&mut self, rules: &[ScopeAttr]) {
+    pub fn apply_attrs(&mut self, rules: &[&dyn ScopeAttr]) {
         fn matches(p: &Path, mut q: &[&str]) -> bool {
             assert!(!q.is_empty());
             if p.leading_colon.is_some() {
@@ -157,7 +166,7 @@ impl Scope {
         let mut i = 0;
         while i < self.attrs.len() {
             for j in 0..rules.len() {
-                if matches(&self.attrs[i].path, rules[j].0) {
+                if matches(&self.attrs[i].path, rules[j].path()) {
                     let attr = self.attrs.remove(i);
                     let span = attr.span();
 
@@ -180,7 +189,7 @@ impl Scope {
                         continue;
                     }
 
-                    if let Err(err) = (rules[j].1)(tokens, span, self) {
+                    if let Err(err) = rules[j].apply(tokens, span, self) {
                         emit_error!(err.span(), "{}", err);
                     }
                     continue;

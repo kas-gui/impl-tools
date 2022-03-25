@@ -82,58 +82,64 @@ impl ImplDefault {
 }
 
 /// [`ScopeAttr`] rule enabling `#[impl_default]` within `impl_scope!`
-pub const ATTR_IMPL_DEFAULT: ScopeAttr = (&["impl_default"], impl_default);
-fn impl_default(attr: TokenStream, attr_span: Span, scope: &mut Scope) -> Result<()> {
-    let attr: ImplDefault = syn::parse2(attr)?;
+pub struct AttrImplDefault;
+impl ScopeAttr for AttrImplDefault {
+    fn path(&self) -> &'static [&'static str] {
+        &["impl_default"]
+    }
 
-    if attr.expr.is_some() {
-        scope
-            .generated
-            .push(attr.gen_expr(&scope.ident, &scope.generics));
-    } else {
-        let fields = match &mut scope.item {
-            ScopeItem::Struct { fields, .. } => match fields {
-                Fields::Named(FieldsNamed { fields, .. })
-                | Fields::Unnamed(FieldsUnnamed { fields, .. }) => {
-                    let iter = fields.iter_mut().map(|field| {
-                        let ident = &field.ident;
-                        if let Some(expr) = field.assign.take().map(|a| a.1) {
-                            quote! { #ident : #expr }
-                        } else {
-                            quote! { #ident : Default::default() }
-                        }
-                    });
-                    quote! { #(#iter),* }
+    fn apply(&self, args: TokenStream, attr_span: Span, scope: &mut Scope) -> Result<()> {
+        let attr: ImplDefault = syn::parse2(args)?;
+
+        if attr.expr.is_some() {
+            scope
+                .generated
+                .push(attr.gen_expr(&scope.ident, &scope.generics));
+        } else {
+            let fields = match &mut scope.item {
+                ScopeItem::Struct { fields, .. } => match fields {
+                    Fields::Named(FieldsNamed { fields, .. })
+                    | Fields::Unnamed(FieldsUnnamed { fields, .. }) => {
+                        let iter = fields.iter_mut().map(|field| {
+                            let ident = &field.ident;
+                            if let Some(expr) = field.assign.take().map(|a| a.1) {
+                                quote! { #ident : #expr }
+                            } else {
+                                quote! { #ident : Default::default() }
+                            }
+                        });
+                        quote! { #(#iter),* }
+                    }
+                    Fields::Unit => quote! {},
+                },
+                _ => {
+                    return Err(Error::new(
+                        attr_span,
+                        "must specify value as `#[impl_default(value)]` on non-struct type",
+                    ));
                 }
-                Fields::Unit => quote! {},
-            },
-            _ => {
-                return Err(Error::new(
-                    attr_span,
-                    "must specify value as `#[impl_default(value)]` on non-struct type",
-                ));
-            }
-        };
+            };
 
-        let ident = &scope.ident;
-        let (impl_generics, ty_generics, _) = scope.generics.split_for_impl();
-        let wc = clause_to_toks(
-            &attr.where_clause,
-            scope.generics.where_clause.as_ref(),
-            &quote! { Default },
-        );
+            let ident = &scope.ident;
+            let (impl_generics, ty_generics, _) = scope.generics.split_for_impl();
+            let wc = clause_to_toks(
+                &attr.where_clause,
+                scope.generics.where_clause.as_ref(),
+                &quote! { Default },
+            );
 
-        scope.generated.push(quote! {
-            impl #impl_generics std::default::Default for #ident #ty_generics #wc {
-                fn default() -> Self {
-                    #ident {
-                        #fields
+            scope.generated.push(quote! {
+                impl #impl_generics std::default::Default for #ident #ty_generics #wc {
+                    fn default() -> Self {
+                        #ident {
+                            #fields
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 impl Parse for ImplDefault {

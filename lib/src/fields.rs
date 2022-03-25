@@ -65,7 +65,7 @@ pub struct Field {
     /// Optional field initializer.
     ///
     /// This is considered legal input when parsing, but not legal output. An
-    /// attribute rule such as [`crate::ATTR_IMPL_DEFAULT`] must remove the
+    /// attribute rule such as [`crate::AttrImplDefault`] must remove the
     /// initializer before output is generated.
     pub assign: Option<(Token![=], Expr)>,
 }

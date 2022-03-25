@@ -18,5 +18,5 @@ pub mod generics;
 mod scope;
 
 pub use autoimpl::AutoImpl;
-pub use default::{ImplDefault, ATTR_IMPL_DEFAULT};
-pub use scope::{Scope, ScopeAttr, ScopeAttrFn, ScopeItem};
+pub use default::{AttrImplDefault, ImplDefault};
+pub use scope::{Scope, ScopeAttr, ScopeItem};
