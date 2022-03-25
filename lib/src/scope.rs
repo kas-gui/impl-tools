@@ -3,7 +3,7 @@
 // You may obtain a copy of the License in the LICENSE-APACHE file or at:
 //     https://www.apache.org/licenses/LICENSE-2.0
 
-use crate::default::{impl_default, Fields};
+use crate::Fields;
 use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
 use proc_macro_error::emit_error;
 use quote::quote;
@@ -14,6 +14,9 @@ use syn::{
     Attribute, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Path, Result, Token, Type,
     Variant, Visibility,
 };
+
+pub type ScopeAttrFn = fn(TokenStream, Span, &mut Scope) -> Result<()>;
+pub type ScopeAttr = (&'static [&'static str], ScopeAttrFn);
 
 /// Content of items supported by [`Scope`] that are not common to all variants
 #[derive(Debug)]
@@ -61,12 +64,11 @@ pub struct Scope {
     pub generated: Vec<TokenStream>,
 }
 
-pub type ApplyAttrFn = fn(TokenStream, Span, &mut Scope) -> Result<()>;
-pub const SCOPE_ATTRS: [(&'static [&'static str], ApplyAttrFn); 1] =
-    [(&["impl_default"], impl_default)];
-
 impl Scope {
-    pub fn apply_attrs(&mut self) {
+    /// Apply attribute rules
+    ///
+    /// Rules are applied in the order of definition
+    pub fn apply_attrs(&mut self, rules: &[ScopeAttr]) {
         fn matches(p: &Path, mut q: &[&str]) -> bool {
             assert!(!q.is_empty());
             if p.leading_colon.is_some() {
@@ -91,8 +93,8 @@ impl Scope {
 
         let mut i = 0;
         while i < self.attrs.len() {
-            for j in 0..SCOPE_ATTRS.len() {
-                if matches(&self.attrs[i].path, SCOPE_ATTRS[j].0) {
+            for j in 0..rules.len() {
+                if matches(&self.attrs[i].path, rules[j].0) {
                     let attr = self.attrs.remove(i);
                     let span = attr.span();
 
@@ -115,7 +117,7 @@ impl Scope {
                         continue;
                     }
 
-                    if let Err(err) = (SCOPE_ATTRS[j].1)(tokens, span, self) {
+                    if let Err(err) = (rules[j].1)(tokens, span, self) {
                         emit_error!(err.span(), "{}", err);
                     }
                     continue;
@@ -124,6 +126,11 @@ impl Scope {
 
             i += 1;
         }
+    }
+
+    /// Generate result
+    pub fn generate(self) -> TokenStream {
+        quote! { #self }
     }
 }
 
@@ -468,9 +475,4 @@ fn extend_generics(generics: &mut Generics, in_generics: &Generics) {
     } else {
         generics.where_clause = in_generics.where_clause.clone();
     }
-}
-
-pub fn scope(mut scope: Scope) -> Result<TokenStream> {
-    scope.apply_attrs();
-    Ok(quote! { #scope })
 }

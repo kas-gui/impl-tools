@@ -113,11 +113,10 @@ doc_comment::doctest!("../README.md");
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use proc_macro_error::{emit_call_site_error, emit_error, proc_macro_error};
+use proc_macro_error::{emit_call_site_error, proc_macro_error};
 use syn::parse_macro_input;
-use syn::Item;
 
-use impl_tools_lib::{autoimpl, default, scope};
+use impl_tools_lib::{AutoImpl, ImplDefault, Scope, ATTR_IMPL_DEFAULT};
 
 /// Implement `Default`
 ///
@@ -172,38 +171,16 @@ use impl_tools_lib::{autoimpl, default, scope};
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let attr = parse_macro_input!(attr as default::Attr);
-    let attr_span = attr.span;
-    if attr.expr.is_some() {
-        let mut toks = item.clone();
-        match parse_macro_input!(item as Item) {
-            Item::Enum(syn::ItemEnum {
-                ident, generics, ..
-            })
-            | Item::Struct(syn::ItemStruct {
-                ident, generics, ..
-            })
-            | Item::Type(syn::ItemType {
-                ident, generics, ..
-            })
-            | Item::Union(syn::ItemUnion {
-                ident, generics, ..
-            }) => {
-                let impl_: TokenStream = attr.gen_expr(&ident, &generics).into();
-                toks.extend(std::iter::once(impl_));
-            }
-            item => {
-                emit_error!(
-                    item,
-                    "default: only supports enum, struct, type alias and union items"
-                );
-            }
-        };
-        toks
-    } else {
-        emit_error!(attr_span, "invalid use outside of `impl_scope!` macro");
-        item
+    let mut toks = item.clone();
+    match syn::parse::<ImplDefault>(attr) {
+        Ok(attr) => toks.extend(TokenStream::from(attr.expand(item.into()))),
+        Err(err) => {
+            emit_call_site_error!(err);
+            // Since this form of invocation only adds implementations, we can
+            // safely output the original item, thus reducing secondary errors.
+        }
     }
+    toks
 }
 
 /// A variant of the standard `derive` macro
@@ -334,18 +311,8 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_error]
 pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut toks = item.clone();
-    match syn::parse(attr) {
-        Ok(attr) => {
-            let item = parse_macro_input!(item as Item);
-            toks.extend(TokenStream::from(match item {
-                Item::Struct(item) => autoimpl::autoimpl_struct(attr, item),
-                Item::Trait(item) => autoimpl::autoimpl_trait(attr, item),
-                item => {
-                    emit_error!(item, "autoimpl: only supports struct and trait items");
-                    return toks;
-                }
-            }));
-        }
+    match syn::parse::<AutoImpl>(attr) {
+        Ok(attr) => toks.extend(TokenStream::from(attr.expand(item.into()))),
         Err(err) => {
             emit_call_site_error!(err);
             // Since autoimpl only adds implementations, we can safely output
@@ -415,8 +382,7 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_error]
 #[proc_macro]
 pub fn impl_scope(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as scope::Scope);
-    scope::scope(input)
-        .unwrap_or_else(|err| err.to_compile_error())
-        .into()
+    let mut scope = parse_macro_input!(input as Scope);
+    scope.apply_attrs(&[ATTR_IMPL_DEFAULT]);
+    scope.generate().into()
 }

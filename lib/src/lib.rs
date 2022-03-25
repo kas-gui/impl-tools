@@ -5,7 +5,12 @@
 
 //! # Impl-tools-lib
 
-pub mod autoimpl;
-pub mod default;
+mod autoimpl;
+mod default;
 pub mod generics;
-pub mod scope;
+mod scope;
+
+pub use autoimpl::AutoImpl;
+pub use default::{Field, Fields, FieldsNamed, FieldsUnnamed};
+pub use default::{ImplDefault, ATTR_IMPL_DEFAULT};
+pub use scope::{Scope, ScopeAttr, ScopeAttrFn, ScopeItem};
