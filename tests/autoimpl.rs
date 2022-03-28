@@ -4,19 +4,27 @@ use std::marker::PhantomData;
 use std::ops::DerefMut;
 
 fn test_has_clone(_: impl Clone) {}
-fn test_has_debug(_: impl Debug) {}
 
-#[autoimpl(Clone, Debug where T: trait)]
-struct Wrapper<T>(pub T);
+#[autoimpl(Clone, Debug)]
+struct Unit;
+
+#[test]
+fn unit() {
+    test_has_clone(Unit);
+    assert_eq!(format!("{:?}", Unit), "Unit");
+}
+
+#[autoimpl(Clone, Debug ignore self.1 where T: trait)]
+struct Wrapper<T>(pub T, ());
 
 #[test]
 fn wrapper() {
-    test_has_clone(Wrapper(0i32));
-    test_has_debug(Wrapper(()));
+    test_has_clone(Wrapper(0i32, ()));
+    assert_eq!(format!("{:?}", Wrapper((), ())), "Wrapper((), _)");
 }
 
 #[autoimpl(Clone, Default where A: trait, B: trait)]
-#[autoimpl(Debug where A: Debug)]
+#[autoimpl(Debug ignore self.c where A: Debug)]
 struct X<A, B: Debug, C> {
     a: A,
     b: B,
@@ -30,7 +38,10 @@ fn x() {
         b: "abc",
         c: PhantomData::<fn()>,
     };
-    test_has_debug(x.clone());
+    let y = x.clone();
+    assert_eq!(x.a, y.a);
+    assert_eq!(x.b, y.b);
+    assert_eq!(format!("{x:?}"), "X { a: 1, b: \"abc\", .. }");
 }
 
 #[autoimpl(Deref, DerefMut using self.t)]

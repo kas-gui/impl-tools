@@ -453,7 +453,7 @@ fn autoimpl_many(
 ) {
     let no_skips = ignores.is_empty();
     let ignore = |item: &Member| -> bool { ignores.iter().any(|mem| *mem == *item) };
-    let ident = &item.ident;
+    let type_ident = &item.ident;
     let (impl_generics, ty_generics, item_wc) = item.generics.split_for_impl();
 
     for target in targets.drain(..) {
@@ -481,7 +481,7 @@ fn autoimpl_many(
                 };
                 let wc = clause_to_toks(clause, item_wc, &quote! { std::clone::Clone });
                 toks.append_all(quote_spanned! {span=>
-                    impl #impl_generics std::clone::Clone for #ident #ty_generics #wc {
+                    impl #impl_generics std::clone::Clone for #type_ident #ty_generics #wc {
                         fn clone(&self) -> Self {
                             #inner
                         }
@@ -489,11 +489,11 @@ fn autoimpl_many(
                 });
             }
             TraitMany::Debug(span) => {
-                let name = ident.to_string();
+                let type_name = type_ident.to_string();
                 let mut inner;
                 match item.fields {
                     Fields::Named(ref fields) => {
-                        inner = quote! { f.debug_struct(#name) };
+                        inner = quote! { f.debug_struct(#type_name) };
                         for field in fields.named.iter() {
                             let ident = field.ident.as_ref().unwrap();
                             if !ignore(&ident.clone().into()) {
@@ -510,24 +510,26 @@ fn autoimpl_many(
                         };
                     }
                     Fields::Unnamed(ref fields) => {
-                        inner = quote! { f.debug_tuple(#name) };
+                        inner = quote! { f.debug_tuple(#type_name) };
                         for i in 0..fields.unnamed.len() {
                             if !ignore(&i.into()) {
                                 let lit = Literal::usize_unsuffixed(i);
                                 inner.append_all(quote! {
                                     .field(&self.#lit)
                                 });
+                            } else {
+                                inner.append_all(quote! {
+                                    .field(&format_args!("_"))
+                                });
                             }
                         }
                         inner.append_all(quote! { .finish() });
                     }
-                    Fields::Unit => {
-                        inner = quote! { #name };
-                    }
+                    Fields::Unit => inner = quote! { f.write_str(#type_name) },
                 }
                 let wc = clause_to_toks(clause, item_wc, &quote! { std::fmt::Debug });
                 toks.append_all(quote_spanned! {span=>
-                    impl #impl_generics std::fmt::Debug for #ident #ty_generics #wc {
+                    impl #impl_generics std::fmt::Debug for #type_ident #ty_generics #wc {
                         fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                             #inner
                         }
@@ -543,22 +545,22 @@ fn autoimpl_many(
                             let field = field.ident.as_ref().unwrap();
                             inner.append_all(quote! { #field: Default::default(), });
                         }
-                        inner = quote! { #ident { #inner } };
+                        inner = quote! { #type_ident { #inner } };
                     }
                     Fields::Unnamed(ref fields) => {
                         inner = quote! {};
                         for _ in 0..fields.unnamed.len() {
                             inner.append_all(quote! { Default::default(), });
                         }
-                        inner = quote! { #ident(#inner) };
+                        inner = quote! { #type_ident(#inner) };
                     }
                     Fields::Unit => {
-                        inner = quote! { #ident };
+                        inner = quote! { #type_ident };
                     }
                 }
                 let wc = clause_to_toks(clause, item_wc, &quote! { std::default::Default });
                 toks.append_all(quote_spanned! {span=>
-                    impl #impl_generics std::default::Default for #ident #ty_generics #wc {
+                    impl #impl_generics std::default::Default for #type_ident #ty_generics #wc {
                         fn default() -> Self {
                             #inner
                         }
@@ -595,7 +597,7 @@ fn autoimpl_one(
         None
     }
 
-    let ident = &item.ident;
+    let type_ident = &item.ident;
     let (impl_generics, ty_generics, item_wc) = item.generics.split_for_impl();
 
     for target in targets.drain(..) {
@@ -604,7 +606,7 @@ fn autoimpl_one(
                 let wc = clause_to_toks(clause, item_wc, &quote! { std::ops::Deref });
                 let ty = for_field(&item.fields, &using, |field| field.ty.clone()).unwrap();
                 toks.append_all(quote_spanned! {span=>
-                    impl #impl_generics std::ops::Deref for #ident #ty_generics #wc {
+                    impl #impl_generics std::ops::Deref for #type_ident #ty_generics #wc {
                         type Target = #ty;
                         fn deref(&self) -> &Self::Target {
                             &self.#using
@@ -615,7 +617,7 @@ fn autoimpl_one(
             TraitOne::DerefMut(span) => {
                 let wc = clause_to_toks(clause, item_wc, &quote! { std::ops::DerefMut });
                 toks.append_all(quote_spanned! {span=>
-                    impl #impl_generics std::ops::DerefMut for #ident #ty_generics #wc {
+                    impl #impl_generics std::ops::DerefMut for #type_ident #ty_generics #wc {
                         fn deref_mut(&mut self) -> &mut Self::Target {
                             &mut self.#using
                         }
