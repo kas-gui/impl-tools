@@ -3,7 +3,7 @@
 // You may obtain a copy of the License in the LICENSE-APACHE file or at:
 //     https://www.apache.org/licenses/LICENSE-2.0
 
-use crate::default::{impl_default, Fields};
+use crate::fields::Fields;
 use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
 use proc_macro_error::emit_error;
 use quote::quote;
@@ -11,34 +11,83 @@ use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Brace, Comma, Semi};
 use syn::{
-    parse_quote, Attribute, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Result, Token,
-    Type, Variant, Visibility,
+    Attribute, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Path, Result, Token, Type,
+    Variant, Visibility,
 };
+
+/// Attribute rule for [`Scope`]
+///
+/// Rules are matched via a path, e.g. `&["foo"]` matches `foo` and
+/// `&["", "foo", "bar"]` matches `::foo::bar`.
+///
+/// Such rules are used to expand attributes within an `impl_scope!`.
+pub trait ScopeAttr {
+    /// Attribute path
+    ///
+    /// Rules are matched via a path, e.g. `&["foo"]` matches `foo` and
+    /// `&["", "foo", "bar"]` matches `::foo::bar`.
+    ///
+    /// Note that we cannot use standard path resolution, so we match only a
+    /// single path, as defined.
+    fn path(&self) -> &'static [&'static str];
+
+    /// Function type of [`ScopeAttr`] rule
+    ///
+    /// Input arguments:
+    ///
+    /// -   `args`: attribute arguments. As with `#[proc_macro_attribute]`
+    ///     macros, this is either empty or the contents of a single grouping token
+    ///     (`()`, `{}` or `[]`).
+    /// -   `span`: the span of the whole attribute. Note that [`Span::call_site`]
+    ///     will return the span of the whole `impl_scope!` macro call. Use this
+    ///     instead when reporting errors on the attribute.
+    /// -   `scope`: mutable reference to the implementation scope. Usually
+    ///     an attribute rule function will read data from the scope and append its
+    ///     output to [`Scope::generated`].
+    fn apply(&self, args: TokenStream, span: Span, scope: &mut Scope) -> Result<()>;
+}
 
 /// Content of items supported by [`Scope`] that are not common to all variants
 #[derive(Debug)]
 pub enum ScopeItem {
+    /// A [`syn::ItemEnum`], minus common parts
     Enum {
+        /// `enum`
         token: Token![enum],
+        /// `{ ... }`
         brace: Brace,
+        /// Variants of enum
         variants: Punctuated<Variant, Comma>,
     },
+    /// A [`syn::ItemStruct`], minus common parts
+    ///
+    /// Uses custom [`Fields`], supporting field initializers.
     Struct {
+        /// `struct`
         token: Token![struct],
+        /// Fields of struct
         fields: Fields,
     },
+    /// A [`syn::ItemType`], minus common parts
     Type {
+        /// `type`
         token: Token![type],
+        /// `=`
         eq_token: Token![=],
+        /// Target type
         ty: Box<Type>,
     },
+    /// A [`syn::ItemUnion`], minus common parts
     Union {
+        /// `union`
         token: Token![union],
+        /// Fields of union
         fields: FieldsNamed,
     },
 }
 
 impl ScopeItem {
+    /// Take span of `enum`/`struct`/`type`/`union` token
     pub fn token_span(&self) -> Span {
         match self {
             ScopeItem::Enum { token, .. } => token.span,
@@ -49,59 +98,117 @@ impl ScopeItem {
     }
 }
 
+/// Contents of `impl_scope!`
+///
+/// `impl_scope!` input consists of one item (an `enum`, `struct`, `type` alias
+/// or `union`) followed by any number of implementations, and is parsed into
+/// this struct.
+///
+/// On its own, `impl_scope!` provides `impl Self` syntax: generics of the type
+/// are attached to the implementation automatically.
+///
+/// The secondary utility of `impl_scope!` is to allow attribute expansion
+/// within itself via [`ScopeAttr`] rules. These rules may read the type item
+/// (which may include field initializers in the case of a struct), read
+/// accompanying implementations, and even modify them.
 #[derive(Debug)]
 pub struct Scope {
+    /// Outer attributes on the item
     pub attrs: Vec<Attribute>,
+    /// Optional `pub`, etc.
     pub vis: Visibility,
+    /// Item identifier
     pub ident: Ident,
+    /// Item generics
     pub generics: Generics,
+    /// The item
     pub item: ScopeItem,
+    /// Trailing semicolon (type alias and unit struct only)
     pub semi: Option<Semi>,
+    /// Implementation items
     pub impls: Vec<ItemImpl>,
+    /// Output of [`ScopeAttr`] rules
+    ///
+    /// This does not contain any content from input, only content generated
+    /// from [`ScopeAttr`] rules. It is appended to output as an item (usually
+    /// a [`syn::ImplItem`]), after [`Self::impls`] items.
     pub generated: Vec<TokenStream>,
 }
 
 impl Scope {
-    pub fn apply_attrs(&mut self) {
+    /// Apply attribute rules
+    ///
+    /// The supplied `rules` are applied in the order of definition, and their
+    /// attributes removed from the item.
+    pub fn apply_attrs(&mut self, rules: &[&dyn ScopeAttr]) {
+        fn matches(p: &Path, mut q: &[&str]) -> bool {
+            assert!(!q.is_empty());
+            if p.leading_colon.is_some() {
+                if !q[0].is_empty() {
+                    return false;
+                }
+                q = &q[1..];
+            }
+
+            if p.segments.len() != q.len() {
+                return false;
+            }
+
+            for (x, y) in p.segments.iter().zip(q.iter()) {
+                if x.ident != y || !x.arguments.is_empty() {
+                    return false;
+                }
+            }
+
+            true
+        }
+
         let mut i = 0;
         while i < self.attrs.len() {
-            if self.attrs[i].path == parse_quote! { impl_default } {
-                let attr = self.attrs.remove(i);
-                let span = attr.span();
+            for rule in rules {
+                if matches(&self.attrs[i].path, rule.path()) {
+                    let attr = self.attrs.remove(i);
+                    let span = attr.span();
 
-                // Emulate #[proc_macro]: attr must contain 0 or 1 group
-                let mut iter = attr.tokens.into_iter();
-                let mut tokens = TokenStream::new();
-                if let Some(tree) = iter.next() {
-                    match tree {
-                        TokenTree::Group(group) if group.delimiter() != Delimiter::None => {
-                            tokens = group.stream();
-                        }
-                        _ => {
-                            emit_error!(tree, "expected one of `(`, `::`, `[`, `]`, or `{`");
-                            continue;
+                    // Emulate #[proc_macro]: attr must contain 0 or 1 group
+                    let mut iter = attr.tokens.into_iter();
+                    let mut tokens = TokenStream::new();
+                    if let Some(tree) = iter.next() {
+                        match tree {
+                            TokenTree::Group(group) if group.delimiter() != Delimiter::None => {
+                                tokens = group.stream();
+                            }
+                            _ => {
+                                emit_error!(tree, "expected one of `(`, `::`, `[`, `]`, or `{`");
+                                continue;
+                            }
                         }
                     }
-                }
-                if let Some(tree) = iter.next() {
-                    emit_error!(tree, "expected `]`");
+                    if let Some(tree) = iter.next() {
+                        emit_error!(tree, "expected `]`");
+                        continue;
+                    }
+
+                    if let Err(err) = rule.apply(tokens, span, self) {
+                        emit_error!(err.span(), "{}", err);
+                    }
                     continue;
                 }
-
-                if let Err(err) = impl_default(tokens, span, self) {
-                    emit_error!(err.span(), "{}", err);
-                }
-                continue;
             }
 
             i += 1;
         }
     }
+
+    /// Generate the result
+    pub fn generate(self) -> TokenStream {
+        quote! { #self }
+    }
 }
 
 mod parsing {
     use super::*;
-    use crate::default::parsing::data_struct;
+    use crate::fields::parsing::data_struct;
     use syn::parse::{Parse, ParseStream};
     use syn::spanned::Spanned;
     use syn::{
@@ -440,9 +547,4 @@ fn extend_generics(generics: &mut Generics, in_generics: &Generics) {
     } else {
         generics.where_clause = in_generics.where_clause.clone();
     }
-}
-
-pub fn scope(mut scope: Scope) -> Result<TokenStream> {
-    scope.apply_attrs();
-    Ok(quote! { #scope })
 }

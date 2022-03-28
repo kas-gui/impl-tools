@@ -14,8 +14,8 @@ use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::{
-    Field, Fields, FnArg, Ident, ItemStruct, ItemTrait, Member, Path, PathArguments, Token,
-    TraitItem, Type, TypePath,
+    parse2, Field, Fields, FnArg, Ident, Item, ItemStruct, ItemTrait, Member, Path, PathArguments,
+    Token, TraitItem, Type, TypePath,
 };
 
 #[allow(non_camel_case_types)]
@@ -80,8 +80,34 @@ enum Body {
     },
 }
 
+/// The `#[autoimpl]` attribute
 pub struct AutoImpl {
     body: Body,
+}
+
+impl AutoImpl {
+    /// Expand over the given `item`
+    ///
+    /// This attribute does not modify the item.
+    /// The caller should append the result to `item` tokens.
+    pub fn expand(self, item: TokenStream) -> TokenStream {
+        let item = match parse2::<Item>(item) {
+            Ok(item) => item,
+            Err(err) => {
+                emit_error!(err.span(), "{}", err);
+                return TokenStream::new();
+            }
+        };
+
+        match item {
+            Item::Struct(item) => autoimpl_struct(self, item),
+            Item::Trait(item) => autoimpl_trait(self, item),
+            item => {
+                emit_error!(item, "autoimpl: only supports struct and trait items");
+                TokenStream::new()
+            }
+        }
+    }
 }
 
 impl Parse for AutoImpl {
@@ -290,7 +316,7 @@ impl Parse for AutoImpl {
     }
 }
 
-pub fn autoimpl_trait(mut attr: AutoImpl, item: ItemTrait) -> TokenStream {
+fn autoimpl_trait(mut attr: AutoImpl, item: ItemTrait) -> TokenStream {
     let mut toks = TokenStream::new();
     match &mut attr.body {
         Body::For {
@@ -366,7 +392,7 @@ pub fn autoimpl_trait(mut attr: AutoImpl, item: ItemTrait) -> TokenStream {
     toks
 }
 
-pub fn autoimpl_struct(attr: AutoImpl, item: ItemStruct) -> TokenStream {
+fn autoimpl_struct(attr: AutoImpl, item: ItemStruct) -> TokenStream {
     fn check_is_field(mem: &Member, fields: &Fields) {
         match (fields, mem) {
             (Fields::Named(fields), Member::Named(ref ident)) => {

@@ -3,147 +3,71 @@
 // You may obtain a copy of the License in the LICENSE-APACHE file or at:
 //     https://www.apache.org/licenses/LICENSE-2.0
 
-use crate::generics::{clause_to_toks, WhereClause};
-use crate::scope::{Scope, ScopeItem};
-use proc_macro2::{Span, TokenStream};
+//! Custom version of [`syn`] fields types supporting initializers
+
+use proc_macro2::TokenStream;
 use proc_macro_error::emit_error;
-use quote::{quote, ToTokens, TokenStreamExt};
-use syn::parse::{Error, Parse, ParseStream, Result};
+use quote::{ToTokens, TokenStreamExt};
+use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
-use syn::{token, Attribute, Expr, Generics, Ident, Token, Type, Visibility};
+use syn::{token, Attribute, Expr, Ident, Token, Type, Visibility};
 
-pub fn impl_default(attr: TokenStream, attr_span: Span, scope: &mut Scope) -> Result<()> {
-    let attr: Attr = syn::parse2(attr)?;
-
-    if attr.expr.is_some() {
-        scope
-            .generated
-            .push(attr.gen_expr(&scope.ident, &scope.generics));
-    } else {
-        let fields = match &mut scope.item {
-            ScopeItem::Struct { fields, .. } => match fields {
-                Fields::Named(FieldsNamed { fields, .. })
-                | Fields::Unnamed(FieldsUnnamed { fields, .. }) => {
-                    let iter = fields.iter_mut().map(|field| {
-                        let ident = &field.ident;
-                        if let Some(expr) = field.assign.take().map(|a| a.1) {
-                            quote! { #ident : #expr }
-                        } else {
-                            quote! { #ident : Default::default() }
-                        }
-                    });
-                    quote! { #(#iter),* }
-                }
-                Fields::Unit => quote! {},
-            },
-            _ => {
-                return Err(Error::new(
-                    attr_span,
-                    "must specify value as `#[impl_default(value)]` on non-struct type",
-                ));
-            }
-        };
-
-        let ident = &scope.ident;
-        let (impl_generics, ty_generics, _) = scope.generics.split_for_impl();
-        let wc = clause_to_toks(
-            &attr.where_clause,
-            scope.generics.where_clause.as_ref(),
-            &quote! { Default },
-        );
-
-        scope.generated.push(quote! {
-            impl #impl_generics std::default::Default for #ident #ty_generics #wc {
-                fn default() -> Self {
-                    #ident {
-                        #fields
-                    }
-                }
-            }
-        });
-    }
-    Ok(())
-}
-
-pub struct Attr {
-    pub expr: Option<Expr>,
-    pub where_clause: Option<WhereClause>,
-    pub span: Span,
-}
-
-impl Parse for Attr {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let mut expr = None;
-        let mut where_clause = None;
-        let span = input.span();
-
-        if !input.peek(Token![where]) && !input.is_empty() {
-            expr = Some(input.parse()?);
-        }
-
-        if input.peek(Token![where]) {
-            where_clause = Some(input.parse()?);
-        }
-
-        if !input.is_empty() {
-            return Err(Error::new(input.span(), "unexpected"));
-        }
-
-        Ok(Attr {
-            expr,
-            where_clause,
-            span,
-        })
-    }
-}
-
-impl Attr {
-    pub fn gen_expr(self, ident: &Ident, generics: &Generics) -> TokenStream {
-        let (impl_generics, ty_generics, _) = generics.split_for_impl();
-        let wc = clause_to_toks(
-            &self.where_clause,
-            generics.where_clause.as_ref(),
-            &quote! { Default },
-        );
-        let expr = self.expr.unwrap();
-
-        quote! {
-            impl #impl_generics std::default::Default for #ident #ty_generics #wc {
-                fn default() -> Self {
-                    #expr
-                }
-            }
-        }
-    }
-}
-
+/// Data stored within an enum variant or struct.
+///
+/// This is a variant of [`syn::Fields`] supporting field initializers.
 #[derive(Debug)]
 pub enum Fields {
+    /// Named fields of a struct or struct variant such as `Point { x: f64, y: f64 }`.
     Named(FieldsNamed),
+    /// Unnamed fields of a tuple struct or tuple variant such as `Some(T)`.
     Unnamed(FieldsUnnamed),
+    /// Unit struct or unit variant such as `None`.
     Unit,
 }
 
+/// Named fields of a struct or struct variant such as `Point { x: f64, y: f64 }`.
+///
+/// This is a variant of [`syn::FieldsNamed`] supporting field initializers.
 #[derive(Debug)]
 pub struct FieldsNamed {
-    brace_token: token::Brace,
-    fields: Punctuated<Field, Token![,]>,
+    /// `{ ... }` around fields
+    pub brace_token: token::Brace,
+    /// Fields
+    pub fields: Punctuated<Field, Token![,]>,
 }
 
+/// Unnamed fields of a tuple struct or tuple variant such as `Some(T)`.
+///
+/// This is a variant of [`syn::FieldsUnnamed`] supporting field initializers.
 #[derive(Debug)]
 pub struct FieldsUnnamed {
-    paren_token: token::Paren,
-    fields: Punctuated<Field, Token![,]>,
+    /// `( ... )` around fields
+    pub paren_token: token::Paren,
+    /// Fields
+    pub fields: Punctuated<Field, Token![,]>,
 }
 
+/// A field of a struct or enum variant.
+///
+/// This is a variant of [`syn::Field`] supporting field initializers.
 #[derive(Debug)]
 pub struct Field {
-    attrs: Vec<Attribute>,
-    vis: Visibility,
-    ident: Option<Ident>,
-    colon_token: Option<Token![:]>,
-    ty: Type,
-    assign: Option<(Token![=], Expr)>,
+    /// Attributes tagged on the field.
+    pub attrs: Vec<Attribute>,
+    /// Visibility of the field.
+    pub vis: Visibility,
+    /// Name of the field, if any.
+    pub ident: Option<Ident>,
+    /// `:` token before type
+    pub colon_token: Option<Token![:]>,
+    /// Type of the field.
+    pub ty: Type,
+    /// Optional field initializer.
+    ///
+    /// This is considered legal input when parsing, but not legal output. An
+    /// attribute rule such as [`crate::AttrImplDefault`] must remove the
+    /// initializer before output is generated.
+    pub assign: Option<(Token![=], Expr)>,
 }
 
 // Copied from syn, modified
@@ -175,6 +99,7 @@ pub(crate) mod parsing {
     }
 
     impl Field {
+        /// Parse a named field
         pub fn parse_named(input: ParseStream) -> Result<Self> {
             Ok(Field {
                 attrs: input.call(Attribute::parse_outer)?,
@@ -194,6 +119,7 @@ pub(crate) mod parsing {
             })
         }
 
+        /// Parse an unnamed field
         pub fn parse_unnamed(input: ParseStream) -> Result<Self> {
             Ok(Field {
                 attrs: input.call(Attribute::parse_outer)?,
@@ -259,53 +185,6 @@ pub(crate) mod parsing {
 
 mod printing {
     use super::*;
-    use std::{iter, slice};
-    use syn::AttrStyle;
-
-    pub struct TokensOrDefault<'a, T: 'a>(pub &'a Option<T>);
-
-    impl<'a, T> ToTokens for TokensOrDefault<'a, T>
-    where
-        T: ToTokens + Default,
-    {
-        fn to_tokens(&self, tokens: &mut TokenStream) {
-            match self.0 {
-                Some(t) => t.to_tokens(tokens),
-                None => T::default().to_tokens(tokens),
-            }
-        }
-    }
-
-    pub trait FilterAttrs<'a> {
-        type Ret: Iterator<Item = &'a Attribute>;
-
-        fn outer(self) -> Self::Ret;
-        fn inner(self) -> Self::Ret;
-    }
-
-    impl<'a> FilterAttrs<'a> for &'a [Attribute] {
-        type Ret = iter::Filter<slice::Iter<'a, Attribute>, fn(&&Attribute) -> bool>;
-
-        fn outer(self) -> Self::Ret {
-            fn is_outer(attr: &&Attribute) -> bool {
-                match attr.style {
-                    AttrStyle::Outer => true,
-                    AttrStyle::Inner(_) => false,
-                }
-            }
-            self.iter().filter(is_outer)
-        }
-
-        fn inner(self) -> Self::Ret {
-            fn is_inner(attr: &&Attribute) -> bool {
-                match attr.style {
-                    AttrStyle::Inner(_) => true,
-                    AttrStyle::Outer => false,
-                }
-            }
-            self.iter().filter(is_inner)
-        }
-    }
 
     impl ToTokens for FieldsNamed {
         fn to_tokens(&self, tokens: &mut TokenStream) {
@@ -329,7 +208,7 @@ mod printing {
             self.vis.to_tokens(tokens);
             if let Some(ident) = &self.ident {
                 ident.to_tokens(tokens);
-                TokensOrDefault(&self.colon_token).to_tokens(tokens);
+                self.colon_token.unwrap_or_default().to_tokens(tokens);
             }
             self.ty.to_tokens(tokens);
 
