@@ -7,15 +7,15 @@ use crate::generics::{
     clause_to_toks, impl_generics, GenericParam, Generics, TypeParamBound, WhereClause,
     WherePredicate,
 };
-use proc_macro2::{Literal, Span, TokenStream};
+use proc_macro2::{Span, TokenStream};
 use proc_macro_error::{emit_call_site_error, emit_error};
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::{
-    parse2, Field, Fields, FnArg, Ident, Item, ItemStruct, ItemTrait, Member, Path, PathArguments,
-    Token, TraitItem, Type, TypePath,
+    parse2, Field, Fields, FnArg, Ident, Index, Item, ItemStruct, ItemTrait, Member, Path,
+    PathArguments, Token, TraitItem, Type, TypePath,
 };
 
 #[allow(non_camel_case_types)]
@@ -61,7 +61,6 @@ fn class(ident: &Ident) -> Option<Class> {
     }
 }
 
-#[derive(Debug)]
 enum Body {
     For {
         generics: Generics,
@@ -69,12 +68,12 @@ enum Body {
         targets: Punctuated<Type, Comma>,
     },
     Many {
-        targets: Vec<TraitMany>,
+        targets: Vec<(Span, &'static dyn AutoImplMany)>,
         ignores: Vec<Member>,
         clause: Option<WhereClause>,
     },
     One {
-        targets: Vec<TraitOne>,
+        targets: Vec<(Span, &'static dyn AutoImplOne)>,
         using: Member,
         clause: Option<WhereClause>,
     },
@@ -116,7 +115,6 @@ impl Parse for AutoImpl {
             None,
             One,
             Many,
-            Default,
         }
         let mut mode = Mode::None;
 
@@ -198,6 +196,7 @@ impl Parse for AutoImpl {
 
         let mut targets_many = Vec::new();
         let mut targets_one = Vec::new();
+        let mut not_supporting_ignore = None;
         let mut using = None;
         let mut ignores = Vec::new();
         let mut clause = None;
@@ -213,36 +212,39 @@ impl Parse for AutoImpl {
             if empty_or_trailing {
                 if lookahead.peek(Ident) {
                     const MSG: &str = "incompatible: traits targetting a single field and traits targetting multiple fields may not be derived simultaneously";
-                    let target = input.parse()?;
+                    let target: Ident = input.parse()?;
+                    let target_span = target.span();
                     match class(&target) {
-                        Some(Class::Many(TraitMany::Default(span))) => {
-                            targets_many.push(TraitMany::Default(span));
-                            match mode {
-                                Mode::None | Mode::Many => mode = Mode::Default,
-                                Mode::One => return Err(Error::new(target.span(), MSG)),
-                                Mode::Default => (),
-                            }
-                        }
                         Some(Class::Many(trait_)) => {
-                            targets_many.push(trait_);
+                            let (span, impl_): (Span, &'static dyn AutoImplMany) = match trait_ {
+                                TraitMany::Clone(span) => (span, &ImplClone),
+                                TraitMany::Debug(span) => (span, &ImplDebug),
+                                TraitMany::Default(span) => (span, &ImplDefault),
+                            };
+                            if not_supporting_ignore.is_none() && !impl_.support_ignore() {
+                                not_supporting_ignore = Some(target.clone());
+                            }
+                            targets_many.push((span, impl_));
                             match mode {
                                 Mode::None => mode = Mode::Many,
-                                Mode::One => return Err(Error::new(target.span(), MSG)),
-                                Mode::Many | Mode::Default => (),
+                                Mode::One => return Err(Error::new(target_span, MSG)),
+                                Mode::Many => (),
                             }
                         }
                         Some(Class::One(trait_)) => {
-                            targets_one.push(trait_);
+                            let (span, impl_): (Span, &'static dyn AutoImplOne) = match trait_ {
+                                TraitOne::Deref(span) => (span, &ImplDeref),
+                                TraitOne::DerefMut(span) => (span, &ImplDerefMut),
+                            };
+                            targets_one.push((span, impl_));
                             match mode {
                                 Mode::None => mode = Mode::One,
                                 Mode::One => (),
-                                Mode::Many | Mode::Default => {
-                                    return Err(Error::new(target.span(), MSG))
-                                }
+                                Mode::Many => return Err(Error::new(target_span, MSG)),
                             }
                         }
                         None => {
-                            return Err(Error::new(target.span(), "unsupported trait"));
+                            return Err(Error::new(target_span, "unsupported trait"));
                         }
                     }
                     empty_or_trailing = false;
@@ -267,10 +269,11 @@ impl Parse for AutoImpl {
             lookahead = input.lookahead1();
         } else if lookahead.peek(kw::ignore) {
             let ignore: kw::ignore = input.parse()?;
-            if matches!(mode, Mode::Default) {
+            if let Some(ref target) = not_supporting_ignore {
                 emit_error!(
                     ignore,
-                    "cannot ignore fields when implementing std::default::Default"
+                    "`#[autoimpl({})]` does not support ignored fields",
+                    target,
                 );
             }
             let _ = input.parse::<Token![self]>()?;
@@ -444,186 +447,271 @@ fn autoimpl_struct(attr: AutoImpl, item: ItemStruct) -> TokenStream {
     toks
 }
 
+pub trait AutoImplMany {
+    /// Trait path
+    fn path(&self) -> TokenStream;
+
+    /// True if this target supports ignoring fields
+    fn support_ignore(&self) -> bool;
+
+    /// Generate struct items
+    ///
+    /// The resulting items are injected into an impl of the form
+    /// `impl<..> TraitName for StructName<..> where .. { #items }`.
+    fn struct_items(&self, item: &ItemStruct, ignore: &dyn Fn(&Member) -> bool) -> TokenStream;
+}
+
+pub struct ImplClone;
+impl AutoImplMany for ImplClone {
+    fn path(&self) -> TokenStream {
+        quote! { ::std::clone::Clone }
+    }
+
+    fn support_ignore(&self) -> bool {
+        true
+    }
+
+    fn struct_items(&self, item: &ItemStruct, ignore: &dyn Fn(&Member) -> bool) -> TokenStream {
+        let type_ident = &item.ident;
+        let inner = match &item.fields {
+            Fields::Named(fields) => {
+                let mut toks = TokenStream::new();
+                for field in fields.named.iter() {
+                    let ident = field.ident.as_ref().unwrap();
+                    if ignore(&Member::Named(ident.clone())) {
+                        toks.append_all(quote! { #ident: Default::default(), });
+                    } else {
+                        toks.append_all(quote! { #ident: self.#ident.clone(), });
+                    }
+                }
+                quote! { #type_ident { #toks } }
+            }
+            Fields::Unnamed(fields) => {
+                let mut toks = TokenStream::new();
+                for i in 0..fields.unnamed.len() {
+                    let index = Index::from(i);
+                    if ignore(&Member::Unnamed(index.clone())) {
+                        toks.append_all(quote! { Default::default(), });
+                    } else {
+                        toks.append_all(quote! { self.#index.clone(), });
+                    }
+                }
+                quote! { #type_ident ( #toks ) }
+            }
+            Fields::Unit => quote! { #type_ident },
+        };
+        quote! {
+            fn clone(&self) -> Self {
+                #inner
+            }
+        }
+    }
+}
+
+pub struct ImplDebug;
+impl AutoImplMany for ImplDebug {
+    fn path(&self) -> TokenStream {
+        quote! { ::std::fmt::Debug }
+    }
+
+    fn support_ignore(&self) -> bool {
+        true
+    }
+
+    fn struct_items(&self, item: &ItemStruct, ignore: &dyn Fn(&Member) -> bool) -> TokenStream {
+        let type_name = item.ident.to_string();
+        let mut inner;
+        match &item.fields {
+            Fields::Named(fields) => {
+                inner = quote! { f.debug_struct(#type_name) };
+                let mut no_skips = true;
+                for field in fields.named.iter() {
+                    let ident = field.ident.as_ref().unwrap();
+                    if !ignore(&Member::Named(ident.clone())) {
+                        let name = ident.to_string();
+                        inner.append_all(quote! {
+                            .field(#name, &self.#ident)
+                        });
+                    } else {
+                        no_skips = false;
+                    }
+                }
+                if no_skips {
+                    inner.append_all(quote! { .finish() });
+                } else {
+                    inner.append_all(quote! { .finish_non_exhaustive() });
+                };
+            }
+            Fields::Unnamed(fields) => {
+                inner = quote! { f.debug_tuple(#type_name) };
+                for i in 0..fields.unnamed.len() {
+                    let index = Index::from(i);
+                    if !ignore(&Member::Unnamed(index.clone())) {
+                        inner.append_all(quote! {
+                            .field(&self.#index)
+                        });
+                    } else {
+                        inner.append_all(quote! {
+                            .field(&format_args!("_"))
+                        });
+                    }
+                }
+                inner.append_all(quote! { .finish() });
+            }
+            Fields::Unit => inner = quote! { f.write_str(#type_name) },
+        };
+        quote! {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                #inner
+            }
+        }
+    }
+}
+
+pub struct ImplDefault;
+impl AutoImplMany for ImplDefault {
+    fn path(&self) -> TokenStream {
+        quote! { ::std::default::Default }
+    }
+
+    fn support_ignore(&self) -> bool {
+        false
+    }
+
+    fn struct_items(&self, item: &ItemStruct, _: &dyn Fn(&Member) -> bool) -> TokenStream {
+        let type_ident = &item.ident;
+        let mut inner;
+        match &item.fields {
+            Fields::Named(fields) => {
+                inner = quote! {};
+                for field in fields.named.iter() {
+                    let ident = field.ident.as_ref().unwrap();
+                    inner.append_all(quote! { #ident: Default::default(), });
+                }
+                inner = quote! { #type_ident { #inner } };
+            }
+            Fields::Unnamed(fields) => {
+                inner = quote! {};
+                for _ in 0..fields.unnamed.len() {
+                    inner.append_all(quote! { Default::default(), });
+                }
+                inner = quote! { #type_ident(#inner) };
+            }
+            Fields::Unit => inner = quote! { #type_ident },
+        }
+        quote! {
+            fn default() -> Self {
+                #inner
+            }
+        }
+    }
+}
+
 fn autoimpl_many(
-    mut targets: Vec<TraitMany>,
+    mut targets: Vec<(Span, &dyn AutoImplMany)>,
     ignores: Vec<Member>,
     item: ItemStruct,
     clause: &Option<WhereClause>,
     toks: &mut TokenStream,
 ) {
-    let no_skips = ignores.is_empty();
     let ignore = |item: &Member| -> bool { ignores.iter().any(|mem| *mem == *item) };
+
     let type_ident = &item.ident;
     let (impl_generics, ty_generics, item_wc) = item.generics.split_for_impl();
 
-    for target in targets.drain(..) {
-        match target {
-            TraitMany::Clone(span) => {
-                let mut inner = quote! {};
-                for (i, field) in item.fields.iter().enumerate() {
-                    let mem = if let Some(ref id) = field.ident {
-                        inner.append_all(quote! { #id: });
-                        Member::from(id.clone())
-                    } else {
-                        Member::from(i)
-                    };
+    for (span, target) in targets.drain(..) {
+        let path = target.path();
+        let wc = clause_to_toks(clause, item_wc, &path);
+        let items = target.struct_items(&item, &ignore);
+        toks.append_all(quote_spanned! {span=>
+            impl #impl_generics #path for #type_ident #ty_generics #wc {
+                #items
+            }
+        });
+    }
+}
 
-                    if ignore(&mem) {
-                        inner.append_all(quote! { Default::default(), });
-                    } else {
-                        inner.append_all(quote! { self.#mem.clone(), });
-                    }
-                }
-                let inner = match &item.fields {
-                    Fields::Named(_) => quote! { Self { #inner } },
-                    Fields::Unnamed(_) => quote! { Self( #inner ) },
-                    Fields::Unit => quote! { Self },
-                };
-                let wc = clause_to_toks(clause, item_wc, &quote! { std::clone::Clone });
-                toks.append_all(quote_spanned! {span=>
-                    impl #impl_generics std::clone::Clone for #type_ident #ty_generics #wc {
-                        fn clone(&self) -> Self {
-                            #inner
-                        }
-                    }
-                });
+pub trait AutoImplOne {
+    /// Trait path
+    fn path(&self) -> TokenStream;
+
+    /// Generate items
+    ///
+    /// Input `field`: the field matched by `using self.ident` syntax on the
+    /// attribute.
+    fn items(&self, type_ident: &Ident, using: &Member, field: &Field) -> TokenStream;
+}
+
+pub struct ImplDeref;
+impl AutoImplOne for ImplDeref {
+    fn path(&self) -> TokenStream {
+        quote! { ::std::ops::Deref }
+    }
+
+    fn items(&self, _: &Ident, using: &Member, field: &Field) -> TokenStream {
+        let ty = field.ty.clone();
+        quote! {
+            type Target = #ty;
+            fn deref(&self) -> &Self::Target {
+                &self.#using
             }
-            TraitMany::Debug(span) => {
-                let type_name = type_ident.to_string();
-                let mut inner;
-                match item.fields {
-                    Fields::Named(ref fields) => {
-                        inner = quote! { f.debug_struct(#type_name) };
-                        for field in fields.named.iter() {
-                            let ident = field.ident.as_ref().unwrap();
-                            if !ignore(&ident.clone().into()) {
-                                let name = ident.to_string();
-                                inner.append_all(quote! {
-                                    .field(#name, &self.#ident)
-                                });
-                            }
-                        }
-                        if no_skips {
-                            inner.append_all(quote! { .finish() });
-                        } else {
-                            inner.append_all(quote! { .finish_non_exhaustive() });
-                        };
-                    }
-                    Fields::Unnamed(ref fields) => {
-                        inner = quote! { f.debug_tuple(#type_name) };
-                        for i in 0..fields.unnamed.len() {
-                            if !ignore(&i.into()) {
-                                let lit = Literal::usize_unsuffixed(i);
-                                inner.append_all(quote! {
-                                    .field(&self.#lit)
-                                });
-                            } else {
-                                inner.append_all(quote! {
-                                    .field(&format_args!("_"))
-                                });
-                            }
-                        }
-                        inner.append_all(quote! { .finish() });
-                    }
-                    Fields::Unit => inner = quote! { f.write_str(#type_name) },
-                }
-                let wc = clause_to_toks(clause, item_wc, &quote! { std::fmt::Debug });
-                toks.append_all(quote_spanned! {span=>
-                    impl #impl_generics std::fmt::Debug for #type_ident #ty_generics #wc {
-                        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                            #inner
-                        }
-                    }
-                });
-            }
-            TraitMany::Default(span) => {
-                let mut inner;
-                match item.fields {
-                    Fields::Named(ref fields) => {
-                        inner = quote! {};
-                        for field in fields.named.iter() {
-                            let field = field.ident.as_ref().unwrap();
-                            inner.append_all(quote! { #field: Default::default(), });
-                        }
-                        inner = quote! { #type_ident { #inner } };
-                    }
-                    Fields::Unnamed(ref fields) => {
-                        inner = quote! {};
-                        for _ in 0..fields.unnamed.len() {
-                            inner.append_all(quote! { Default::default(), });
-                        }
-                        inner = quote! { #type_ident(#inner) };
-                    }
-                    Fields::Unit => {
-                        inner = quote! { #type_ident };
-                    }
-                }
-                let wc = clause_to_toks(clause, item_wc, &quote! { std::default::Default });
-                toks.append_all(quote_spanned! {span=>
-                    impl #impl_generics std::default::Default for #type_ident #ty_generics #wc {
-                        fn default() -> Self {
-                            #inner
-                        }
-                    }
-                });
+        }
+    }
+}
+
+pub struct ImplDerefMut;
+impl AutoImplOne for ImplDerefMut {
+    fn path(&self) -> TokenStream {
+        quote! { ::std::ops::DerefMut }
+    }
+
+    fn items(&self, _: &Ident, using: &Member, _: &Field) -> TokenStream {
+        quote! {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.#using
             }
         }
     }
 }
 
 fn autoimpl_one(
-    mut targets: Vec<TraitOne>,
+    mut targets: Vec<(Span, &dyn AutoImplOne)>,
     using: Member,
     item: ItemStruct,
     clause: &Option<WhereClause>,
     toks: &mut TokenStream,
 ) {
-    fn for_field<T, F: Fn(&Field) -> T>(fields: &Fields, mem: &Member, f: F) -> Option<T> {
+    fn for_field<'a>(fields: &'a Fields, mem: &Member) -> Option<&'a Field> {
         match (fields, mem) {
             (Fields::Named(ref fields), Member::Named(ref ident)) => {
                 for field in fields.named.iter() {
                     if field.ident.as_ref() == Some(ident) {
-                        return Some(f(field));
+                        return Some(field);
                     }
                 }
             }
             (Fields::Unnamed(ref fields), Member::Unnamed(index)) => {
                 if let Some(field) = fields.unnamed.iter().nth(index.index as usize) {
-                    return Some(f(field));
+                    return Some(field);
                 }
             }
             _ => (),
         }
         None
     }
+    let field = for_field(&item.fields, &using).unwrap();
 
     let type_ident = &item.ident;
     let (impl_generics, ty_generics, item_wc) = item.generics.split_for_impl();
 
-    for target in targets.drain(..) {
-        match target {
-            TraitOne::Deref(span) => {
-                let wc = clause_to_toks(clause, item_wc, &quote! { std::ops::Deref });
-                let ty = for_field(&item.fields, &using, |field| field.ty.clone()).unwrap();
-                toks.append_all(quote_spanned! {span=>
-                    impl #impl_generics std::ops::Deref for #type_ident #ty_generics #wc {
-                        type Target = #ty;
-                        fn deref(&self) -> &Self::Target {
-                            &self.#using
-                        }
-                    }
-                });
+    for (span, target) in targets.drain(..) {
+        let path = target.path();
+        let wc = clause_to_toks(clause, item_wc, &path);
+        let items = target.items(type_ident, &using, field);
+        toks.append_all(quote_spanned! {span=>
+            impl #impl_generics #path for #type_ident #ty_generics #wc {
+                #items
             }
-            TraitOne::DerefMut(span) => {
-                let wc = clause_to_toks(clause, item_wc, &quote! { std::ops::DerefMut });
-                toks.append_all(quote_spanned! {span=>
-                    impl #impl_generics std::ops::DerefMut for #type_ident #ty_generics #wc {
-                        fn deref_mut(&mut self) -> &mut Self::Target {
-                            &mut self.#using
-                        }
-                    }
-                });
-            }
-        }
+        });
     }
 }
