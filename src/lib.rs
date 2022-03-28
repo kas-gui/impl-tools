@@ -116,7 +116,7 @@ use proc_macro::TokenStream;
 use proc_macro_error::{emit_call_site_error, proc_macro_error};
 use syn::parse_macro_input;
 
-use impl_tools_lib::{AttrImplDefault, AutoImpl, ImplDefault, Scope};
+use impl_tools_lib::{autoimpl, AttrImplDefault, ImplDefault, Scope};
 
 /// Implement `Default`
 ///
@@ -311,7 +311,7 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_error]
 pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut toks = item.clone();
-    match syn::parse::<AutoImpl>(attr) {
+    match syn::parse::<autoimpl::Attribute>(attr) {
         Ok(attr) => toks.extend(TokenStream::from(attr.expand(item.into()))),
         Err(err) => {
             emit_call_site_error!(err);

@@ -11,12 +11,11 @@
 
 #![deny(missing_docs)]
 
-mod autoimpl;
+pub mod autoimpl;
 mod default;
 pub mod fields;
 pub mod generics;
 mod scope;
 
-pub use autoimpl::AutoImpl;
 pub use default::{AttrImplDefault, ImplDefault};
 pub use scope::{Scope, ScopeAttr, ScopeItem};
