@@ -311,8 +311,11 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_error]
 pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut toks = item.clone();
-    match syn::parse::<autoimpl::Attribute>(attr) {
-        Ok(attr) => toks.extend(TokenStream::from(attr.expand(item.into()))),
+    match syn::parse::<autoimpl::Attr>(attr) {
+        Ok(autoimpl::Attr::ForDeref(ai)) => toks.extend(TokenStream::from(ai.expand(item.into()))),
+        Ok(autoimpl::Attr::ImplTraits(ai)) => {
+            toks.extend(TokenStream::from(ai.expand(item.into())))
+        }
         Err(err) => {
             emit_call_site_error!(err);
             // Since autoimpl only adds implementations, we can safely output

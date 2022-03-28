@@ -14,8 +14,10 @@
 pub mod autoimpl;
 mod default;
 pub mod fields;
+mod for_deref;
 pub mod generics;
 mod scope;
 
 pub use default::{AttrImplDefault, ImplDefault};
+pub use for_deref::ForDeref;
 pub use scope::{Scope, ScopeAttr, ScopeItem};

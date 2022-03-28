@@ -5,19 +5,13 @@
 
 //! Implementation of the `#[autoimpl]` attribute
 
-use crate::generics::{
-    clause_to_toks, impl_generics, GenericParam, Generics, TypeParamBound, WhereClause,
-    WherePredicate,
-};
+use crate::generics::{clause_to_toks, WhereClause};
+use crate::ForDeref;
 use proc_macro2::{Span, TokenStream};
-use proc_macro_error::{emit_call_site_error, emit_error};
-use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
-use syn::punctuated::Punctuated;
+use proc_macro_error::emit_error;
+use quote::{quote, quote_spanned, TokenStreamExt};
 use syn::token::Comma;
-use syn::{
-    parse2, Field, Fields, FnArg, Ident, Index, Item, ItemStruct, ItemTrait, Member, Path,
-    PathArguments, Token, TraitItem, Type, TypePath,
-};
+use syn::{parse2, Field, Fields, Ident, Index, Item, ItemStruct, Member, Token};
 
 #[allow(non_camel_case_types)]
 mod kw {
@@ -27,47 +21,19 @@ mod kw {
     custom_keyword!(using);
 }
 
-enum Body {
-    For {
-        generics: Generics,
-        definitive: Ident,
-        targets: Punctuated<Type, Comma>,
-    },
-    Trait {
-        targets: Vec<(Span, &'static dyn ImplTrait)>,
-        args: Arguments,
-        clause: Option<WhereClause>,
-    },
-}
-
 /// The `#[autoimpl]` attribute
-pub struct Attribute {
-    body: Body,
+pub enum Attr {
+    /// Autoimpl for types supporting `Deref`
+    ForDeref(ForDeref),
+    /// Autoimpl for trait targets
+    ImplTraits(ImplTraits),
 }
 
-impl Attribute {
-    /// Expand over the given `item`
-    ///
-    /// This attribute does not modify the item.
-    /// The caller should append the result to `item` tokens.
-    pub fn expand(self, item: TokenStream) -> TokenStream {
-        let item = match parse2::<Item>(item) {
-            Ok(item) => item,
-            Err(err) => {
-                emit_error!(err.span(), "{}", err);
-                return TokenStream::new();
-            }
-        };
-
-        match item {
-            Item::Struct(item) => autoimpl_struct(self, item),
-            Item::Trait(item) => autoimpl_trait(self, item),
-            item => {
-                emit_error!(item, "autoimpl: only supports struct and trait items");
-                TokenStream::new()
-            }
-        }
-    }
+/// Autoimpl for trait targets
+pub struct ImplTraits {
+    targets: Vec<(Span, &'static dyn ImplTrait)>,
+    args: ImplArgs,
+    clause: Option<WhereClause>,
 }
 
 /// Error type
@@ -87,82 +53,13 @@ mod parsing {
     use super::*;
     use syn::parse::{Error, Parse, ParseStream, Result};
 
-    impl Parse for Attribute {
+    impl Parse for Attr {
         fn parse(input: ParseStream) -> Result<Self> {
             let mut empty_or_trailing = true;
             let mut lookahead = input.lookahead1();
 
             if lookahead.peek(Token![for]) {
-                let _ = input.parse::<Token![for]>()?;
-                let mut generics: Generics = input.parse()?;
-
-                let targets = Punctuated::parse_separated_nonempty(input)?;
-
-                lookahead = input.lookahead1();
-                if lookahead.peek(Token![where]) {
-                    generics.where_clause = Some(input.parse()?);
-                    lookahead = input.lookahead1();
-                }
-
-                if !input.is_empty() {
-                    return Err(lookahead.error());
-                }
-
-                let mut definitive: Option<Ident> = None;
-                for param in &generics.params {
-                    if let GenericParam::Type(param) = param {
-                        for bound in &param.bounds {
-                            if matches!(bound, TypeParamBound::TraitSubst(_)) {
-                                definitive = Some(param.ident.clone());
-                                break;
-                            }
-                        }
-                    }
-                }
-                if definitive.is_none() {
-                    if let Some(clause) = generics.where_clause.as_ref() {
-                        for pred in &clause.predicates {
-                            if let WherePredicate::Type(pred) = pred {
-                                for bound in &pred.bounds {
-                                    if matches!(bound, TypeParamBound::TraitSubst(_)) {
-                                        match pred.bounded_ty {
-                                            Type::Path(TypePath {
-                                                qself: None,
-                                                path:
-                                                    Path {
-                                                        leading_colon: None,
-                                                        ref segments,
-                                                    },
-                                            }) if segments.len() == 1
-                                                && matches!(
-                                                    segments[0].arguments,
-                                                    PathArguments::None
-                                                ) =>
-                                            {
-                                                definitive = Some(segments[0].ident.clone());
-                                                break;
-                                            }
-                                            _ => (),
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                let definitive = match definitive {
-                    Some(def) => def,
-                    None => {
-                        return Err(Error::new(Span::call_site(), "no definitive type parameter — either a type parameter must have bound like `T: trait` or the type must be specified explicitly, e.g. `using dyn MyTrait`"));
-                    }
-                };
-
-                let body = Body::For {
-                    generics,
-                    definitive,
-                    targets,
-                };
-                return Ok(Attribute { body });
+                return input.call(ForDeref::parse).map(Attr::ForDeref);
             }
 
             let mut targets = Vec::new();
@@ -261,167 +158,97 @@ mod parsing {
                 }
             }
 
-            let args = Arguments { ignores, using };
-            let body = Body::Trait {
+            let args = ImplArgs { ignores, using };
+            Ok(Attr::ImplTraits(ImplTraits {
                 targets,
                 args,
                 clause,
-            };
-            Ok(Attribute { body })
+            }))
         }
     }
 }
 
-fn autoimpl_trait(mut attr: Attribute, item: ItemTrait) -> TokenStream {
-    let mut toks = TokenStream::new();
-    match &mut attr.body {
-        Body::For {
-            generics,
-            definitive,
-            targets,
-        } => {
-            let trait_ident = &item.ident;
-            let (_, ty_generics, _) = item.generics.split_for_impl();
-            let trait_ty = quote! { #trait_ident #ty_generics };
-            let impl_generics = impl_generics(generics, &trait_ty);
-            let where_clause = clause_to_toks(
-                &generics.where_clause,
-                item.generics.where_clause.as_ref(),
-                &trait_ty,
-            );
+impl ImplTraits {
+    /// Expand over the given `item`
+    ///
+    /// This attribute does not modify the item.
+    /// The caller should append the result to `item` tokens.
+    pub fn expand(mut self, item: TokenStream) -> TokenStream {
+        let item = match parse2::<Item>(item) {
+            Ok(Item::Struct(item)) => item,
+            Ok(item) => {
+                emit_error!(item, "expected struct");
+                return TokenStream::new();
+            }
+            Err(err) => {
+                emit_error!(err.span(), "{}", err);
+                return TokenStream::new();
+            }
+        };
 
-            let definitive = quote! { < #definitive as #trait_ty > };
-
-            for target in targets {
-                let mut impl_items = TokenStream::new();
-                for item in &item.items {
-                    match item {
-                        TraitItem::Const(item) => {
-                            let ident = &item.ident;
-                            let ty = &item.ty;
-                            impl_items.append_all(quote! {
-                                const #ident : #ty = #definitive :: #ident;
-                            });
-                        }
-                        TraitItem::Method(item) => {
-                            let sig = &item.sig;
-                            let ident = &sig.ident;
-                            let params = sig.inputs.iter().map(|arg| match arg {
-                                FnArg::Receiver(arg) => &arg.self_token as &dyn ToTokens,
-                                FnArg::Typed(arg) => &arg.pat,
-                            });
-                            impl_items.append_all(quote! {
-                                #sig {
-                                    #definitive :: #ident ( #(#params),* )
-                                }
-                            });
-                        }
-                        TraitItem::Type(item) => {
-                            let ident = &item.ident;
-                            impl_items.append_all(quote! {
-                                type #ident = #definitive :: #ident;
-                            });
-                        }
-                        TraitItem::Macro(item) => {
-                            emit_error!(item, "unsupported: macro item in trait");
-                        }
-                        TraitItem::Verbatim(item) => {
-                            emit_error!(item, "unsupported: verbatim item in trait");
-                        }
-
-                        #[cfg(test)]
-                        TraitItem::__TestExhaustive(_) => unimplemented!(),
-                        #[cfg(not(test))]
-                        _ => (),
+        fn check_is_field(mem: &Member, fields: &Fields) {
+            match (fields, mem) {
+                (Fields::Named(fields), Member::Named(ref ident)) => {
+                    if fields
+                        .named
+                        .iter()
+                        .any(|field| field.ident.as_ref() == Some(ident))
+                    {
+                        return;
                     }
                 }
-
-                toks.append_all(quote! {
-                    impl #impl_generics #trait_ty for #target #where_clause {
-                        #impl_items
+                (Fields::Unnamed(fields), Member::Unnamed(index)) => {
+                    if (index.index as usize) < fields.unnamed.len() {
+                        return;
                     }
-                });
-            }
-        }
-        _ => emit_call_site_error!("autoimpl: expected `for<Params..> Types..` on trait item"),
-    }
-    toks
-}
-
-fn autoimpl_struct(attr: Attribute, item: ItemStruct) -> TokenStream {
-    fn check_is_field(mem: &Member, fields: &Fields) {
-        match (fields, mem) {
-            (Fields::Named(fields), Member::Named(ref ident)) => {
-                if fields
-                    .named
-                    .iter()
-                    .any(|field| field.ident.as_ref() == Some(ident))
-                {
-                    return;
                 }
+                _ => (),
             }
-            (Fields::Unnamed(fields), Member::Unnamed(index)) => {
-                if (index.index as usize) < fields.unnamed.len() {
-                    return;
-                }
-            }
-            _ => (),
+            emit_error!(mem, "not a struct field");
         }
-        emit_error!(mem, "not a struct field");
-    }
 
-    let mut toks = TokenStream::new();
-    match attr.body {
-        Body::For { .. } => {
-            emit_call_site_error!("autoimpl: `for<..>` not supported on struct item")
+        let mut toks = TokenStream::new();
+        for mem in &self.args.ignores {
+            check_is_field(mem, &item.fields);
         }
-        Body::Trait {
-            mut targets,
-            args,
-            clause,
-        } => {
-            for mem in &args.ignores {
-                check_is_field(mem, &item.fields);
-            }
-            if let Some(mem) = args.using_member() {
-                check_is_field(mem, &item.fields);
-            }
+        if let Some(mem) = self.args.using_member() {
+            check_is_field(mem, &item.fields);
+        }
 
-            let type_ident = &item.ident;
-            let (impl_generics, ty_generics, item_wc) = item.generics.split_for_impl();
+        let type_ident = &item.ident;
+        let (impl_generics, ty_generics, item_wc) = item.generics.split_for_impl();
 
-            for (span, target) in targets.drain(..) {
-                match target.struct_items(&item, &args) {
-                    Ok(items) => {
-                        let path = target.path();
-                        let wc = clause_to_toks(&clause, item_wc, &path);
-                        toks.append_all(quote_spanned! {span=>
-                            impl #impl_generics #path for #type_ident #ty_generics #wc {
-                                #items
-                            }
-                        });
-                    }
-                    Err(error) => match error {
-                        Error::RequireUsing => {
-                            emit_error!(span, "target requires argument `using self.FIELD`")
+        for (span, target) in self.targets.drain(..) {
+            match target.struct_items(&item, &self.args) {
+                Ok(items) => {
+                    let path = target.path();
+                    let wc = clause_to_toks(&self.clause, item_wc, &path);
+                    toks.append_all(quote_spanned! {span=>
+                        impl #impl_generics #path for #type_ident #ty_generics #wc {
+                            #items
                         }
-                        Error::CallSite(msg) => emit_error!(span, msg),
-                        Error::WithSpan(span, msg) => emit_error!(span, msg),
-                    },
+                    });
                 }
+                Err(error) => match error {
+                    Error::RequireUsing => {
+                        emit_error!(span, "target requires argument `using self.FIELD`")
+                    }
+                    Error::CallSite(msg) => emit_error!(span, msg),
+                    Error::WithSpan(span, msg) => emit_error!(span, msg),
+                },
             }
         }
+        toks
     }
-    toks
 }
 
 /// Arguments passed to [`ImplTrait`] implementation methods
-pub struct Arguments {
+pub struct ImplArgs {
     ignores: Vec<Member>,
     using: Option<Member>,
 }
 
-impl Arguments {
+impl ImplArgs {
     /// If true, this field is ignored
     pub fn ignore(&self, member: &Member) -> bool {
         self.ignores.iter().any(|ig| *ig == *member)
@@ -487,7 +314,7 @@ pub trait ImplTrait {
     ///
     /// The resulting items are injected into an impl of the form
     /// `impl<..> TraitName for StructName<..> where .. { #items }`.
-    fn struct_items(&self, item: &ItemStruct, args: &Arguments) -> Result<TokenStream>;
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream>;
 }
 
 /// Implement [`std::clone::Clone`]
@@ -505,7 +332,7 @@ impl ImplTrait for ImplClone {
         false
     }
 
-    fn struct_items(&self, item: &ItemStruct, args: &Arguments) -> Result<TokenStream> {
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
         let type_ident = &item.ident;
         let inner = match &item.fields {
             Fields::Named(fields) => {
@@ -557,7 +384,7 @@ impl ImplTrait for ImplDebug {
         false
     }
 
-    fn struct_items(&self, item: &ItemStruct, args: &Arguments) -> Result<TokenStream> {
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
         let type_name = item.ident.to_string();
         let mut inner;
         match &item.fields {
@@ -622,7 +449,7 @@ impl ImplTrait for ImplDefault {
         false
     }
 
-    fn struct_items(&self, item: &ItemStruct, _: &Arguments) -> Result<TokenStream> {
+    fn struct_items(&self, item: &ItemStruct, _: &ImplArgs) -> Result<TokenStream> {
         let type_ident = &item.ident;
         let mut inner;
         match &item.fields {
@@ -666,7 +493,7 @@ impl ImplTrait for ImplDeref {
         true
     }
 
-    fn struct_items(&self, item: &ItemStruct, args: &Arguments) -> Result<TokenStream> {
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
         if let Some(field) = args.using_field(&item.fields) {
             let ty = field.ty.clone();
             let member = args.using_member().unwrap();
@@ -697,7 +524,7 @@ impl ImplTrait for ImplDerefMut {
         true
     }
 
-    fn struct_items(&self, _: &ItemStruct, args: &Arguments) -> Result<TokenStream> {
+    fn struct_items(&self, _: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
         if let Some(member) = args.using_member() {
             Ok(quote! {
                 fn deref_mut(&mut self) -> &mut Self::Target {
