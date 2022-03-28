@@ -165,8 +165,8 @@ impl Scope {
 
         let mut i = 0;
         while i < self.attrs.len() {
-            for j in 0..rules.len() {
-                if matches(&self.attrs[i].path, rules[j].path()) {
+            for rule in rules {
+                if matches(&self.attrs[i].path, rule.path()) {
                     let attr = self.attrs.remove(i);
                     let span = attr.span();
 
@@ -189,7 +189,7 @@ impl Scope {
                         continue;
                     }
 
-                    if let Err(err) = rules[j].apply(tokens, span, self) {
+                    if let Err(err) = rule.apply(tokens, span, self) {
                         emit_error!(err.span(), "{}", err);
                     }
                     continue;

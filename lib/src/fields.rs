@@ -208,9 +208,7 @@ mod printing {
             self.vis.to_tokens(tokens);
             if let Some(ident) = &self.ident {
                 ident.to_tokens(tokens);
-                self.colon_token
-                    .unwrap_or(Default::default())
-                    .to_tokens(tokens);
+                self.colon_token.unwrap_or_default().to_tokens(tokens);
             }
             self.ty.to_tokens(tokens);
 
