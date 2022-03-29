@@ -116,7 +116,7 @@ use proc_macro::TokenStream;
 use proc_macro_error::{emit_call_site_error, proc_macro_error};
 use syn::parse_macro_input;
 
-use impl_tools_lib::{autoimpl, AttrImplDefault, ImplDefault, Scope};
+use impl_tools_lib::{autoimpl, AttrImplDefault, ImplDefault, Scope, ScopeAttr};
 
 /// Implement `Default`
 ///
@@ -394,6 +394,11 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn impl_scope(input: TokenStream) -> TokenStream {
     let mut scope = parse_macro_input!(input as Scope);
-    scope.apply_attrs(&[&AttrImplDefault]);
+    scope.apply_attrs(|path| {
+        AttrImplDefault
+            .path()
+            .matches(path)
+            .then(|| &AttrImplDefault as &dyn ScopeAttr)
+    });
     scope.generate().into()
 }

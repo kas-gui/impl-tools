@@ -140,38 +140,36 @@ impl Scope {
     ///
     /// The supplied `rules` are applied in the order of definition, and their
     /// attributes removed from the item.
-    pub fn apply_attrs(&mut self, rules: &[&dyn ScopeAttr]) {
+    pub fn apply_attrs(&mut self, find_rule: impl Fn(&Path) -> Option<&'static dyn ScopeAttr>) {
         let mut i = 0;
         while i < self.attrs.len() {
-            for rule in rules {
-                if rule.path().matches(&self.attrs[i].path) {
-                    let attr = self.attrs.remove(i);
-                    let span = attr.span();
+            if let Some(rule) = find_rule(&self.attrs[i].path) {
+                let attr = self.attrs.remove(i);
+                let span = attr.span();
 
-                    // Emulate #[proc_macro]: attr must contain 0 or 1 group
-                    let mut iter = attr.tokens.into_iter();
-                    let mut tokens = TokenStream::new();
-                    if let Some(tree) = iter.next() {
-                        match tree {
-                            TokenTree::Group(group) if group.delimiter() != Delimiter::None => {
-                                tokens = group.stream();
-                            }
-                            _ => {
-                                emit_error!(tree, "expected one of `(`, `::`, `[`, `]`, or `{`");
-                                continue;
-                            }
+                // Emulate #[proc_macro]: attr must contain 0 or 1 group
+                let mut iter = attr.tokens.into_iter();
+                let mut tokens = TokenStream::new();
+                if let Some(tree) = iter.next() {
+                    match tree {
+                        TokenTree::Group(group) if group.delimiter() != Delimiter::None => {
+                            tokens = group.stream();
+                        }
+                        _ => {
+                            emit_error!(tree, "expected one of `(`, `::`, `[`, `]`, or `{`");
+                            continue;
                         }
                     }
-                    if let Some(tree) = iter.next() {
-                        emit_error!(tree, "expected `]`");
-                        continue;
-                    }
-
-                    if let Err(err) = rule.apply(tokens, span, self) {
-                        emit_error!(err.span(), "{}", err);
-                    }
+                }
+                if let Some(tree) = iter.next() {
+                    emit_error!(tree, "expected `]`");
                     continue;
                 }
+
+                if let Err(err) = rule.apply(tokens, span, self) {
+                    emit_error!(err.span(), "{}", err);
+                }
+                continue;
             }
 
             i += 1;
