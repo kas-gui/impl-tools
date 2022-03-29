@@ -43,7 +43,7 @@ fn x() {
     let y = x.clone();
     assert_eq!(x.a, y.a);
     assert_eq!(x.b, y.b);
-    assert_eq!(format!("{x:?}"), "X { a: 1, b: \"abc\", .. }");
+    assert_eq!(format!("{:?}", x), "X { a: 1, b: \"abc\", .. }");
 }
 
 #[autoimpl(Deref, DerefMut using self.t)]
