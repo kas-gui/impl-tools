@@ -5,7 +5,7 @@
 
 use crate::fields::{Fields, FieldsNamed, FieldsUnnamed};
 use crate::generics::{clause_to_toks, WhereClause};
-use crate::{Scope, ScopeAttr, ScopeItem};
+use crate::{Scope, ScopeAttr, ScopeItem, SimplePath};
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::emit_error;
 use quote::quote;
@@ -84,8 +84,8 @@ impl ImplDefault {
 /// [`ScopeAttr`] rule enabling `#[impl_default]` within `impl_scope!`
 pub struct AttrImplDefault;
 impl ScopeAttr for AttrImplDefault {
-    fn path(&self) -> &'static [&'static str] {
-        &["impl_default"]
+    fn path(&self) -> SimplePath {
+        SimplePath(&["impl_default"])
     }
 
     fn apply(&self, args: TokenStream, attr_span: Span, scope: &mut Scope) -> Result<()> {

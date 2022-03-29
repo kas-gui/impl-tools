@@ -6,10 +6,10 @@
 //! Implementation of the `#[autoimpl]` attribute
 
 use crate::generics::{clause_to_toks, WhereClause};
-use crate::ForDeref;
+use crate::{ForDeref, SimplePath};
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::emit_error;
-use quote::{quote, quote_spanned, TokenStreamExt};
+use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
 use syn::token::Comma;
 use syn::{parse2, Field, Fields, Ident, Index, Item, ItemStruct, Member, Token};
 
@@ -222,7 +222,7 @@ impl ImplTraits {
         for (span, target) in impl_targets.drain(..) {
             match target.struct_items(&item, &self.args) {
                 Ok(items) => {
-                    let path = target.path();
+                    let path = target.path().to_token_stream();
                     let wc = clause_to_toks(&self.clause, item_wc, &path);
                     toks.append_all(quote_spanned! {span=>
                         impl #impl_generics #path for #type_ident #ty_generics #wc {
@@ -302,11 +302,11 @@ impl ImplArgs {
 
 /// Trait required by extensions
 pub trait ImplTrait {
-    /// Name to match against
-    fn name(&self) -> &'static str;
-
     /// Trait path
-    fn path(&self) -> TokenStream;
+    ///
+    /// The full path is printed in implementations. Only the last component is
+    /// normally used when matching.
+    fn path(&self) -> SimplePath;
 
     /// True if this target supports ignoring fields
     fn support_ignore(&self) -> bool;
@@ -333,12 +333,8 @@ pub const STD_IMPLS: &[&dyn ImplTrait] = &[
 /// Implement [`std::clone::Clone`]
 pub struct ImplClone;
 impl ImplTrait for ImplClone {
-    fn name(&self) -> &'static str {
-        "Clone"
-    }
-
-    fn path(&self) -> TokenStream {
-        quote! { ::std::clone::Clone }
+    fn path(&self) -> SimplePath {
+        SimplePath(&["", "std", "clone", "Clone"])
     }
 
     fn support_ignore(&self) -> bool {
@@ -389,12 +385,8 @@ impl ImplTrait for ImplClone {
 /// Implement [`std::fmt::Debug`]
 pub struct ImplDebug;
 impl ImplTrait for ImplDebug {
-    fn name(&self) -> &'static str {
-        "Debug"
-    }
-
-    fn path(&self) -> TokenStream {
-        quote! { ::std::fmt::Debug }
+    fn path(&self) -> SimplePath {
+        SimplePath(&["", "std", "fmt", "Debug"])
     }
 
     fn support_ignore(&self) -> bool {
@@ -458,12 +450,8 @@ impl ImplTrait for ImplDebug {
 /// Implement [`std::default::Default`]
 pub struct ImplDefault;
 impl ImplTrait for ImplDefault {
-    fn name(&self) -> &'static str {
-        "Default"
-    }
-
-    fn path(&self) -> TokenStream {
-        quote! { ::std::default::Default }
+    fn path(&self) -> SimplePath {
+        SimplePath(&["", "std", "default", "Default"])
     }
 
     fn support_ignore(&self) -> bool {
@@ -506,12 +494,8 @@ impl ImplTrait for ImplDefault {
 /// Implement [`std::ops::Deref`]
 pub struct ImplDeref;
 impl ImplTrait for ImplDeref {
-    fn name(&self) -> &'static str {
-        "Deref"
-    }
-
-    fn path(&self) -> TokenStream {
-        quote! { ::std::ops::Deref }
+    fn path(&self) -> SimplePath {
+        SimplePath(&["", "std", "ops", "Deref"])
     }
 
     fn support_ignore(&self) -> bool {
@@ -541,12 +525,8 @@ impl ImplTrait for ImplDeref {
 /// Implement [`std::ops::DerefMut`]
 pub struct ImplDerefMut;
 impl ImplTrait for ImplDerefMut {
-    fn name(&self) -> &'static str {
-        "DerefMut"
-    }
-
-    fn path(&self) -> TokenStream {
-        quote! { ::std::ops::DerefMut }
+    fn path(&self) -> SimplePath {
+        SimplePath(&["", "std", "ops", "DerefMut"])
     }
 
     fn support_ignore(&self) -> bool {

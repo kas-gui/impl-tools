@@ -320,7 +320,7 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
                 autoimpl::STD_IMPLS
                     .iter()
                     .cloned()
-                    .find(|impl_| *ident == impl_.name())
+                    .find(|impl_| impl_.path().matches_ident(ident))
             };
             toks.extend(TokenStream::from(ai.expand(item.into(), find_impl)))
         }

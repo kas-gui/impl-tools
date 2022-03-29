@@ -3,7 +3,7 @@
 // You may obtain a copy of the License in the LICENSE-APACHE file or at:
 //     https://www.apache.org/licenses/LICENSE-2.0
 
-use crate::fields::Fields;
+use crate::{fields::Fields, SimplePath};
 use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
 use proc_macro_error::emit_error;
 use quote::quote;
@@ -29,7 +29,7 @@ pub trait ScopeAttr {
     ///
     /// Note that we cannot use standard path resolution, so we match only a
     /// single path, as defined.
-    fn path(&self) -> &'static [&'static str];
+    fn path(&self) -> SimplePath;
 
     /// Function type of [`ScopeAttr`] rule
     ///
@@ -141,32 +141,10 @@ impl Scope {
     /// The supplied `rules` are applied in the order of definition, and their
     /// attributes removed from the item.
     pub fn apply_attrs(&mut self, rules: &[&dyn ScopeAttr]) {
-        fn matches(p: &Path, mut q: &[&str]) -> bool {
-            assert!(!q.is_empty());
-            if p.leading_colon.is_some() {
-                if !q[0].is_empty() {
-                    return false;
-                }
-                q = &q[1..];
-            }
-
-            if p.segments.len() != q.len() {
-                return false;
-            }
-
-            for (x, y) in p.segments.iter().zip(q.iter()) {
-                if x.ident != y || !x.arguments.is_empty() {
-                    return false;
-                }
-            }
-
-            true
-        }
-
         let mut i = 0;
         while i < self.attrs.len() {
             for rule in rules {
-                if matches(&self.attrs[i].path, rule.path()) {
+                if rule.path().matches(&self.attrs[i].path) {
                     let attr = self.attrs.remove(i);
                     let span = attr.span();
 
