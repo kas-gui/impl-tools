@@ -108,12 +108,29 @@ impl_scope! {
 ```
 
 
+Extensibility
+-------------
+
+Rust's `#[derive]` macro allows downstream crates to add implementations for their own traits
+(via a special `proc-macro` crate). Want to do the same with `#[autoimpl]` and with attributes in
+`impl_scope!`? You can, but the process is a little different:
+
+1.  Create a copy of the `impl-tools` crate (which is just a thin wrapper around `impl-tools-lib`),
+    and change the name.
+2.  Add your own implementations of [`impl_tools_lib::autoimpl::ImplTrait`] and/or
+    [`impl_tools_lib::ScopeAttr`].
+3.  Modify the `autoimpl` / `impl_scope` attribute definitions to include your implementations.
+
+
 Supported Rust Versions
 ------------------------------
 
-The MSRV is 1.56.0 (first to support Edition 2021).
+The MSRV is 1.56.0 for no particular reason other than that it is the first to support Edition 2021.
 
-Using a nightly compiler will improve diagnostics.
+Using a nightly compiler allows improved diagnostics, but otherwise stable Rust
+is fully supported.
+
+`no_std` is not yet supported (see #7).
 
 
 Alternatives
