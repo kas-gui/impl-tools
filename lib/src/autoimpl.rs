@@ -335,7 +335,7 @@ pub const STD_IMPLS: &[&dyn ImplTrait] = &[
 pub struct ImplClone;
 impl ImplTrait for ImplClone {
     fn path(&self) -> SimplePath {
-        SimplePath(&["", "std", "clone", "Clone"])
+        SimplePath::new(&["", "std", "clone", "Clone"])
     }
 
     fn support_ignore(&self) -> bool {
@@ -387,7 +387,7 @@ impl ImplTrait for ImplClone {
 pub struct ImplDebug;
 impl ImplTrait for ImplDebug {
     fn path(&self) -> SimplePath {
-        SimplePath(&["", "std", "fmt", "Debug"])
+        SimplePath::new(&["", "std", "fmt", "Debug"])
     }
 
     fn support_ignore(&self) -> bool {
@@ -452,7 +452,7 @@ impl ImplTrait for ImplDebug {
 pub struct ImplDefault;
 impl ImplTrait for ImplDefault {
     fn path(&self) -> SimplePath {
-        SimplePath(&["", "std", "default", "Default"])
+        SimplePath::new(&["", "std", "default", "Default"])
     }
 
     fn support_ignore(&self) -> bool {
@@ -496,7 +496,7 @@ impl ImplTrait for ImplDefault {
 pub struct ImplDeref;
 impl ImplTrait for ImplDeref {
     fn path(&self) -> SimplePath {
-        SimplePath(&["", "std", "ops", "Deref"])
+        SimplePath::new(&["", "std", "ops", "Deref"])
     }
 
     fn support_ignore(&self) -> bool {
@@ -527,7 +527,7 @@ impl ImplTrait for ImplDeref {
 pub struct ImplDerefMut;
 impl ImplTrait for ImplDerefMut {
     fn path(&self) -> SimplePath {
-        SimplePath(&["", "std", "ops", "DerefMut"])
+        SimplePath::new(&["", "std", "ops", "DerefMut"])
     }
 
     fn support_ignore(&self) -> bool {

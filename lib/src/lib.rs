@@ -33,7 +33,7 @@ impl SimplePath {
     /// be empty. At least one non-empty component is required.
     ///
     /// Panics if requirements are not met.
-    pub fn new(&self, path: &'static [&'static str]) -> Self {
+    pub fn new(path: &'static [&'static str]) -> Self {
         let mut is_empty = false;
         for (i, s) in path.iter().enumerate() {
             is_empty = is_empty && s.is_empty();
