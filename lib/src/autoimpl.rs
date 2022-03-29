@@ -31,7 +31,7 @@ pub enum Attr {
 
 /// Autoimpl for trait targets
 pub struct ImplTraits {
-    targets: Vec<(Span, &'static dyn ImplTrait)>,
+    targets: Vec<Ident>,
     args: ImplArgs,
     clause: Option<WhereClause>,
 }
@@ -51,7 +51,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 mod parsing {
     use super::*;
-    use syn::parse::{Error, Parse, ParseStream, Result};
+    use syn::parse::{Parse, ParseStream, Result};
 
     impl Parse for Attr {
         fn parse(input: ParseStream) -> Result<Self> {
@@ -63,8 +63,6 @@ mod parsing {
             }
 
             let mut targets = Vec::new();
-            let mut not_supporting_ignore = None;
-            let mut not_supporting_using = None;
             let mut using = None;
             let mut ignores = Vec::new();
             let mut clause = None;
@@ -79,26 +77,7 @@ mod parsing {
 
                 if empty_or_trailing {
                     if lookahead.peek(Ident) {
-                        let target: Ident = input.parse()?;
-                        let target_span = target.span();
-                        let target_impl: &'static dyn ImplTrait = match &target {
-                            ident if ident == "Clone" => &ImplClone,
-                            ident if ident == "Debug" => &ImplDebug,
-                            ident if ident == "Default" => &ImplDefault,
-                            ident if ident == "Deref" => &ImplDeref,
-                            ident if ident == "DerefMut" => &ImplDerefMut,
-                            _ => return Err(Error::new(target_span, "unsupported trait")),
-                        };
-
-                        if not_supporting_ignore.is_none() && !target_impl.support_ignore() {
-                            not_supporting_ignore = Some(target.clone());
-                        }
-                        if not_supporting_using.is_none() && !target_impl.support_using() {
-                            not_supporting_using = Some(target.clone());
-                        }
-
-                        targets.push((target_span, target_impl));
-
+                        targets.push(input.parse()?);
                         empty_or_trailing = false;
                         lookahead = input.lookahead1();
                         continue;
@@ -115,28 +94,12 @@ mod parsing {
             while !input.is_empty() {
                 lookahead = input.lookahead1();
                 if clause.is_none() && using.is_none() && lookahead.peek(kw::using) {
-                    let kw: kw::using = input.parse()?;
-                    if let Some(target) = not_supporting_using.as_ref() {
-                        emit_error!(
-                            kw,
-                            "`#[autoimpl({})]` does not support `using` a field",
-                            target,
-                        );
-                    }
-
+                    let _: kw::using = input.parse()?;
                     let _ = input.parse::<Token![self]>()?;
                     let _ = input.parse::<Token![.]>()?;
                     using = Some(input.parse()?);
                 } else if clause.is_none() && ignores.is_empty() && lookahead.peek(kw::ignore) {
-                    let kw: kw::ignore = input.parse()?;
-                    if let Some(ref target) = not_supporting_ignore {
-                        emit_error!(
-                            kw,
-                            "`#[autoimpl({})]` does not support `ignore` of fields",
-                            target,
-                        );
-                    }
-
+                    let _: kw::ignore = input.parse()?;
                     let _ = input.parse::<Token![self]>()?;
                     let _ = input.parse::<Token![.]>()?;
                     ignores.push(input.parse()?);
@@ -173,7 +136,11 @@ impl ImplTraits {
     ///
     /// This attribute does not modify the item.
     /// The caller should append the result to `item` tokens.
-    pub fn expand(mut self, item: TokenStream) -> TokenStream {
+    pub fn expand(
+        mut self,
+        item: TokenStream,
+        find_impl: impl Fn(&Ident) -> Option<&'static dyn ImplTrait>,
+    ) -> TokenStream {
         let item = match parse2::<Item>(item) {
             Ok(Item::Struct(item)) => item,
             Ok(item) => {
@@ -181,10 +148,44 @@ impl ImplTraits {
                 return TokenStream::new();
             }
             Err(err) => {
-                emit_error!(err.span(), "{}", err);
+                emit_error!(err);
                 return TokenStream::new();
             }
         };
+
+        let mut not_supporting_ignore = None;
+        let mut not_supporting_using = None;
+
+        let mut impl_targets: Vec<(Span, _)> = Vec::with_capacity(self.targets.len());
+        for target in self.targets.drain(..) {
+            let target_impl = match find_impl(&target) {
+                Some(impl_) => impl_,
+                None => {
+                    emit_error!(target, "unsupported trait");
+                    return TokenStream::new();
+                }
+            };
+
+            if not_supporting_ignore.is_none() && !target_impl.support_ignore() {
+                not_supporting_ignore = Some(target.clone());
+            }
+            if not_supporting_using.is_none() && !target_impl.support_using() {
+                not_supporting_using = Some(target.clone());
+            }
+
+            impl_targets.push((target.span(), target_impl));
+        }
+
+        if !self.args.ignores.is_empty() {
+            if let Some(ref target) = not_supporting_ignore {
+                emit_error!(target, "target does not support `ignore`-d fields",);
+            }
+        }
+        if self.args.using.is_some() {
+            if let Some(target) = not_supporting_using.as_ref() {
+                emit_error!(target, "`target does not support `using` a field",);
+            }
+        }
 
         fn check_is_field(mem: &Member, fields: &Fields) {
             match (fields, mem) {
@@ -218,7 +219,7 @@ impl ImplTraits {
         let type_ident = &item.ident;
         let (impl_generics, ty_generics, item_wc) = item.generics.split_for_impl();
 
-        for (span, target) in self.targets.drain(..) {
+        for (span, target) in impl_targets.drain(..) {
             match target.struct_items(&item, &self.args) {
                 Ok(items) => {
                     let path = target.path();
@@ -301,6 +302,9 @@ impl ImplArgs {
 
 /// Trait required by extensions
 pub trait ImplTrait {
+    /// Name to match against
+    fn name(&self) -> &'static str;
+
     /// Trait path
     fn path(&self) -> TokenStream;
 
@@ -317,9 +321,22 @@ pub trait ImplTrait {
     fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream>;
 }
 
+/// List of all builtin trait implementations
+pub const STD_IMPLS: &[&dyn ImplTrait] = &[
+    &ImplClone,
+    &ImplDebug,
+    &ImplDefault,
+    &ImplDeref,
+    &ImplDerefMut,
+];
+
 /// Implement [`std::clone::Clone`]
 pub struct ImplClone;
 impl ImplTrait for ImplClone {
+    fn name(&self) -> &'static str {
+        "Clone"
+    }
+
     fn path(&self) -> TokenStream {
         quote! { ::std::clone::Clone }
     }
@@ -372,6 +389,10 @@ impl ImplTrait for ImplClone {
 /// Implement [`std::fmt::Debug`]
 pub struct ImplDebug;
 impl ImplTrait for ImplDebug {
+    fn name(&self) -> &'static str {
+        "Debug"
+    }
+
     fn path(&self) -> TokenStream {
         quote! { ::std::fmt::Debug }
     }
@@ -437,6 +458,10 @@ impl ImplTrait for ImplDebug {
 /// Implement [`std::default::Default`]
 pub struct ImplDefault;
 impl ImplTrait for ImplDefault {
+    fn name(&self) -> &'static str {
+        "Default"
+    }
+
     fn path(&self) -> TokenStream {
         quote! { ::std::default::Default }
     }
@@ -481,6 +506,10 @@ impl ImplTrait for ImplDefault {
 /// Implement [`std::ops::Deref`]
 pub struct ImplDeref;
 impl ImplTrait for ImplDeref {
+    fn name(&self) -> &'static str {
+        "Deref"
+    }
+
     fn path(&self) -> TokenStream {
         quote! { ::std::ops::Deref }
     }
@@ -512,6 +541,10 @@ impl ImplTrait for ImplDeref {
 /// Implement [`std::ops::DerefMut`]
 pub struct ImplDerefMut;
 impl ImplTrait for ImplDerefMut {
+    fn name(&self) -> &'static str {
+        "DerefMut"
+    }
+
     fn path(&self) -> TokenStream {
         quote! { ::std::ops::DerefMut }
     }

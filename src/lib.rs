@@ -314,7 +314,15 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
     match syn::parse::<autoimpl::Attr>(attr) {
         Ok(autoimpl::Attr::ForDeref(ai)) => toks.extend(TokenStream::from(ai.expand(item.into()))),
         Ok(autoimpl::Attr::ImplTraits(ai)) => {
-            toks.extend(TokenStream::from(ai.expand(item.into())))
+            // We could use lazy_static to construct a HashMap for fast lookups,
+            // but given the small number of impls a "linear map" is fine.
+            let find_impl = |ident: &syn::Ident| {
+                autoimpl::STD_IMPLS
+                    .iter()
+                    .cloned()
+                    .find(|impl_| *ident == impl_.name())
+            };
+            toks.extend(TokenStream::from(ai.expand(item.into(), find_impl)))
         }
         Err(err) => {
             emit_call_site_error!(err);
