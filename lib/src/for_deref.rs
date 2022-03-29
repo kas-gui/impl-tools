@@ -173,9 +173,11 @@ impl ForDeref {
                         emit_error!(item, "unsupported: verbatim item in trait");
                     }
 
+                    /* Testing of exhaustive matching is disabled: syn 1.0.90 breaks it.
                     #[cfg(test)]
                     TraitItem::__TestExhaustive(_) => unimplemented!(),
                     #[cfg(not(test))]
+                    */
                     _ => (),
                 }
             }
