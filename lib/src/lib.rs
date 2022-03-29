@@ -28,28 +28,37 @@ pub struct SimplePath(&'static [&'static str]);
 impl SimplePath {
     /// Construct, verifying validity
     ///
-    /// Required: path is non-empty, and only first component is allowed to be
-    /// zero-length.
+    /// If the first component is an empty string, this is treated as a leading
+    /// colon (e.g. `["", "abc", "Def"] == `::abc::Def`). No other component may
+    /// be empty. At least one non-empty component is required.
+    ///
+    /// Panics if requirements are not met.
     pub fn new(&self, path: &'static [&'static str]) -> Self {
-        if path.is_empty() {
-            panic!("empty path");
-        }
-        for s in path.iter().skip(1) {
-            if s.is_empty() {
+        let mut is_empty = false;
+        for (i, s) in path.iter().enumerate() {
+            is_empty = is_empty && s.is_empty();
+            if i > 0 && s.is_empty() {
                 panic!("empty component");
             }
+        }
+        if is_empty {
+            panic!("empty path");
         }
         SimplePath(path)
     }
 
     /// True if this matches a [`syn::Path`]
+    ///
+    /// This must match the path exactly, with one exception: if `path` has no
+    /// leading colon but `self` does (empty first component), then `path` may
+    /// still match the remaining components of `self`.
     pub fn matches(&self, path: &syn::Path) -> bool {
         let mut q = self.0;
         assert!(!q.is_empty());
-        if path.leading_colon.is_some() {
-            if !q[0].is_empty() {
-                return false;
-            }
+        if path.leading_colon.is_some() && !q[0].is_empty() {
+            return false;
+        }
+        if q[0].is_empty() {
             q = &q[1..];
         }
 
@@ -70,6 +79,18 @@ impl SimplePath {
     pub fn matches_ident(&self, ident: &syn::Ident) -> bool {
         assert!(!self.0.is_empty());
         self.0.iter().last().map(|s| ident == s).unwrap_or(false)
+    }
+
+    /// If input `path` has a single component with no leading colon, then
+    /// match via [`Self::matches_ident`]; otherwise match via
+    /// [`Self::matches`].
+    pub fn matches_ident_or_path(&self, path: &syn::Path) -> bool {
+        if path.leading_colon.is_none() && path.segments.len() == 1 {
+            let seg = &path.segments[0];
+            seg.arguments.is_empty() && self.matches_ident(&seg.ident)
+        } else {
+            self.matches(path)
+        }
     }
 }
 

@@ -316,11 +316,11 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
         Ok(autoimpl::Attr::ImplTraits(ai)) => {
             // We could use lazy_static to construct a HashMap for fast lookups,
             // but given the small number of impls a "linear map" is fine.
-            let find_impl = |ident: &syn::Ident| {
+            let find_impl = |path: &syn::Path| {
                 autoimpl::STD_IMPLS
                     .iter()
                     .cloned()
-                    .find(|impl_| impl_.path().matches_ident(ident))
+                    .find(|impl_| impl_.path().matches_ident_or_path(path))
             };
             toks.extend(TokenStream::from(ai.expand(item.into(), find_impl)))
         }

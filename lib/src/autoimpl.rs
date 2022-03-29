@@ -10,8 +10,9 @@ use crate::{ForDeref, SimplePath};
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::emit_error;
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
+use syn::spanned::Spanned;
 use syn::token::Comma;
-use syn::{parse2, Field, Fields, Ident, Index, Item, ItemStruct, Member, Token};
+use syn::{parse2, Field, Fields, Ident, Index, Item, ItemStruct, Member, Path, Token};
 
 #[allow(non_camel_case_types)]
 mod kw {
@@ -31,7 +32,7 @@ pub enum Attr {
 
 /// Autoimpl for trait targets
 pub struct ImplTraits {
-    targets: Vec<Ident>,
+    targets: Vec<Path>,
     args: ImplArgs,
     clause: Option<WhereClause>,
 }
@@ -139,7 +140,7 @@ impl ImplTraits {
     pub fn expand(
         mut self,
         item: TokenStream,
-        find_impl: impl Fn(&Ident) -> Option<&'static dyn ImplTrait>,
+        find_impl: impl Fn(&Path) -> Option<&'static dyn ImplTrait>,
     ) -> TokenStream {
         let item = match parse2::<Item>(item) {
             Ok(Item::Struct(item)) => item,

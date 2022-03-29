@@ -7,7 +7,7 @@ use std::ops::DerefMut;
 
 fn test_has_clone(_: impl Clone) {}
 
-#[autoimpl(Clone, Debug)]
+#[autoimpl(std::clone::Clone, std::fmt::Debug)]
 struct Unit;
 
 #[test]
