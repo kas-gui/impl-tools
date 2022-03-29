@@ -9,7 +9,7 @@ use crate::generics::{clause_to_toks, WhereClause};
 use crate::{ForDeref, SimplePath};
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::emit_error;
-use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{parse2, Field, Fields, Ident, Index, Item, ItemStruct, Member, Path, Token};
@@ -34,7 +34,6 @@ pub enum Attr {
 pub struct ImplTraits {
     targets: Vec<Path>,
     args: ImplArgs,
-    clause: Option<WhereClause>,
 }
 
 /// Error type
@@ -122,12 +121,12 @@ mod parsing {
                 }
             }
 
-            let args = ImplArgs { ignores, using };
-            Ok(Attr::ImplTraits(ImplTraits {
-                targets,
-                args,
+            let args = ImplArgs {
+                ignores,
+                using,
                 clause,
-            }))
+            };
+            Ok(Attr::ImplTraits(ImplTraits { targets, args }))
         }
     }
 }
@@ -217,20 +216,9 @@ impl ImplTraits {
             check_is_field(mem, &item.fields);
         }
 
-        let type_ident = &item.ident;
-        let (impl_generics, ty_generics, item_wc) = item.generics.split_for_impl();
-
         for (span, target) in impl_targets.drain(..) {
-            match target.struct_items(&item, &self.args) {
-                Ok(items) => {
-                    let path = target.path().to_token_stream();
-                    let wc = clause_to_toks(&self.clause, item_wc, &path);
-                    toks.append_all(quote_spanned! {span=>
-                        impl #impl_generics #path for #type_ident #ty_generics #wc {
-                            #items
-                        }
-                    });
-                }
+            match target.struct_impl(&item, &self.args) {
+                Ok(items) => toks.append_all(items),
                 Err(error) => match error {
                     Error::RequireUsing => {
                         emit_error!(span, "target requires argument `using self.FIELD`")
@@ -246,8 +234,12 @@ impl ImplTraits {
 
 /// Arguments passed to [`ImplTrait`] implementation methods
 pub struct ImplArgs {
-    ignores: Vec<Member>,
-    using: Option<Member>,
+    /// Fields ignored in attribute
+    pub ignores: Vec<Member>,
+    /// Field specified to 'use' in attribute
+    pub using: Option<Member>,
+    /// Where clause added to attribute
+    pub clause: Option<WhereClause>,
 }
 
 impl ImplArgs {
@@ -314,6 +306,28 @@ pub trait ImplTrait {
 
     /// True if this target supports using a field
     fn support_using(&self) -> bool;
+
+    /// Generate an impl for a struct item
+    ///
+    /// The default implementation is a wrapper around [`Self::struct_items`]
+    /// and suffices for most cases. It may be overridden, e.g. to generate
+    /// multiple implementation items. It is not recommended to modify the
+    /// generics.
+    fn struct_impl(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
+        let type_ident = &item.ident;
+        let (impl_generics, ty_generics, item_wc) = item.generics.split_for_impl();
+
+        let path = self.path().to_token_stream();
+        let wc = clause_to_toks(&args.clause, item_wc, &path);
+
+        let items = self.struct_items(item, args)?;
+
+        Ok(quote! {
+            impl #impl_generics #path for #type_ident #ty_generics #wc {
+                #items
+            }
+        })
+    }
 
     /// Generate struct items
     ///
