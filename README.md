@@ -116,6 +116,23 @@ The MSRV is 1.56.0 (first to support Edition 2021).
 Using a nightly compiler will improve diagnostics.
 
 
+Alternatives
+------------
+
+Both [Educe](https://crates.io/crates/educe) and [Derivative](https://crates.io/crates/derivative)
+have similar functionality: the ability to implement various traits with more flexibility than
+libstd's `#[derive]`. They also support more functionality such as tweaking the output of `Debug`.
+Both have less clean syntax, requiring a minimum of two attributes to do anything, with further
+attributes to customise implementations (e.g. to ignore a field).
+
+[derive_more](https://crates.io/crates/derive_more) isn't exactly an "alternative", simply
+supporting `#[derive]` for more standard traits. Possible functionality overlap in the future
+(though for now `#[autoimpl]` doesn't support half the traits supported by `#[derive]`).
+
+[auto_impl](https://crates.io/crates/auto_impl/) allows implementing a trait for reference types
+(`&`, `&mut`, `Box`, `Rc`, `Arc`) as well as function types.
+
+
 Copyright and Licence
 ---------------------
 
