@@ -11,8 +11,8 @@ use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Brace, Comma, Semi};
 use syn::{
-    Attribute, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Path, Result, Token, Type,
-    Variant, Visibility,
+    Attribute, Error, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Path, Result, Token,
+    Type, Variant, Visibility,
 };
 
 /// Attribute rule for [`Scope`]
@@ -135,6 +135,50 @@ pub struct Scope {
     pub generated: Vec<TokenStream>,
 }
 
+/// Emulate `#[proc_macro]` token parsing
+///
+/// A `#[proc_macro]` accepts either no arguments (`#[foo]`) or an explicit
+/// group of arguments (`#[foo(...)]`, `#[foo[...]]`, `#[foo{...}]`). The macro
+/// implementation does not see the grouping token, but nevertheless only
+/// functions on one of these forms of input. (A third form of attribute,
+/// `#[foo = val]`, exists, but is not usable from `#[proc_macro]`.)
+///
+/// In contrast, [`Attribute::tokens`] contains the raw content following the
+/// attribute's path. This method may be applied to these tokens to emulate
+/// `#[proc_macro]`.
+///
+/// Output is one of:
+///
+/// -   `Ok((Delimiter::None, TokenStream::new()))` when `tokens.is_empty()`
+/// -   `Ok((delimiter, inner_tokens))` when the input `tokens` is an explicit
+///     grouping (`()`, `[]` or `{}`) over `inner_tokens` (in this case,
+///     `delimiter != Delimiter::None`)
+/// -   `Err(_)` if `tokens` is anything else or anything follows the first
+///     group
+pub fn parse_attr_group(tokens: TokenStream) -> Result<(Delimiter, TokenStream)> {
+    let mut iter = tokens.into_iter();
+    let mut delimiter = Delimiter::None;
+    let mut tokens = TokenStream::new();
+    if let Some(tree) = iter.next() {
+        match tree {
+            TokenTree::Group(group) if group.delimiter() != Delimiter::None => {
+                delimiter = group.delimiter();
+                tokens = group.stream();
+            }
+            _ => {
+                return Err(Error::new(
+                    tree.span(),
+                    "expected one of `(`, `::`, `[`, `]`, or `{`",
+                ))
+            }
+        }
+    }
+    if let Some(tree) = iter.next() {
+        return Err(Error::new(tree.span(), "expected `]`"));
+    }
+    Ok((delimiter, tokens))
+}
+
 impl Scope {
     /// Apply attribute rules
     ///
@@ -147,24 +191,13 @@ impl Scope {
                 let attr = self.attrs.remove(i);
                 let span = attr.span();
 
-                // Emulate #[proc_macro]: attr must contain 0 or 1 group
-                let mut iter = attr.tokens.into_iter();
-                let mut tokens = TokenStream::new();
-                if let Some(tree) = iter.next() {
-                    match tree {
-                        TokenTree::Group(group) if group.delimiter() != Delimiter::None => {
-                            tokens = group.stream();
-                        }
-                        _ => {
-                            emit_error!(tree, "expected one of `(`, `::`, `[`, `]`, or `{`");
-                            continue;
-                        }
+                let tokens = match parse_attr_group(attr.tokens) {
+                    Ok((_, tokens)) => tokens,
+                    Err(err) => {
+                        emit_error!(err);
+                        continue;
                     }
-                }
-                if let Some(tree) = iter.next() {
-                    emit_error!(tree, "expected `]`");
-                    continue;
-                }
+                };
 
                 if let Err(err) = rule.apply(tokens, span, self) {
                     emit_error!(err.span(), "{}", err);
