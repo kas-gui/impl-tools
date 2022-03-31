@@ -400,5 +400,5 @@ pub fn impl_scope(input: TokenStream) -> TokenStream {
             .matches(path)
             .then(|| &AttrImplDefault as &dyn ScopeAttr)
     });
-    scope.generate().into()
+    scope.expand().into()
 }

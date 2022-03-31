@@ -6,13 +6,13 @@
 use crate::{fields::Fields, SimplePath};
 use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
 use proc_macro_error::emit_error;
-use quote::quote;
+use quote::{ToTokens, TokenStreamExt};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Brace, Comma, Semi};
 use syn::{
-    Attribute, Error, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Path, Result, Token,
-    Type, Variant, Visibility,
+    parse_quote, Attribute, Error, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Path,
+    Result, Token, Type, Variant, Visibility,
 };
 
 /// Attribute rule for [`Scope`]
@@ -104,8 +104,12 @@ impl ScopeItem {
 /// or `union`) followed by any number of implementations, and is parsed into
 /// this struct.
 ///
-/// On its own, `impl_scope!` provides `impl Self` syntax: generics of the type
-/// are attached to the implementation automatically.
+/// On its own, `impl_scope!` provides `impl Self` syntax, with the following
+/// expansion done within [`Self::expand`] (after application [`ScopeAttr`]
+/// rules):
+///
+/// -   `impl Self { ... }` expands to `impl #impl_generics #ty_ident #ty_generics #where_clause { ... }`
+/// -   `impl Self where #clause2 { ... }` expands similarly, but using the combined where clause
 ///
 /// The secondary utility of `impl_scope!` is to allow attribute expansion
 /// within itself via [`ScopeAttr`] rules. These rules may read the type item
@@ -209,9 +213,30 @@ impl Scope {
         }
     }
 
-    /// Generate the result
-    pub fn generate(self) -> TokenStream {
-        quote! { #self }
+    /// Expand `impl Self`
+    ///
+    /// This is done automatically by [`Self::expand`]. It may be called earlier
+    /// by a [`ScopeAttr`] if required. Calling multiple times is harmless.
+    pub fn expand_impl_self(&mut self) {
+        for impl_ in self.impls.iter_mut() {
+            if impl_.self_ty == parse_quote! { Self } {
+                let mut ident = self.ident.clone();
+                ident.set_span(impl_.self_ty.span());
+                let (_, ty_generics, _) = self.generics.split_for_impl();
+                impl_.self_ty = parse_quote! { #ident #ty_generics };
+                extend_generics(&mut impl_.generics, &self.generics);
+            }
+        }
+    }
+
+    /// Generate the [`TokenStream`]
+    ///
+    /// This is a convenience function. It is valid to, instead, (1) call
+    /// [`Self::expand_impl_self`], then (2) use the [`ToTokens`] impl on
+    /// `Scope`.
+    pub fn expand(mut self) -> TokenStream {
+        self.expand_impl_self();
+        self.to_token_stream()
     }
 }
 
@@ -220,10 +245,7 @@ mod parsing {
     use crate::fields::parsing::data_struct;
     use syn::parse::{Parse, ParseStream};
     use syn::spanned::Spanned;
-    use syn::{
-        braced, bracketed, parse_quote, AttrStyle, Error, Field, Lifetime, Path, TypePath,
-        WhereClause,
-    };
+    use syn::{braced, bracketed, AttrStyle, Error, Field, Lifetime, Path, TypePath, WhereClause};
 
     impl Parse for Scope {
         fn parse(input: ParseStream) -> Result<Self> {
@@ -291,7 +313,7 @@ mod parsing {
 
             let mut impls = Vec::new();
             while !input.is_empty() {
-                impls.push(parse_impl(&generics, &ident, input)?);
+                impls.push(parse_impl(&ident, input)?);
             }
 
             Ok(Scope {
@@ -307,11 +329,7 @@ mod parsing {
         }
     }
 
-    fn parse_impl(
-        in_generics: &Generics,
-        in_ident: &Ident,
-        input: ParseStream,
-    ) -> Result<ItemImpl> {
+    fn parse_impl(in_ident: &Ident, input: ParseStream) -> Result<ItemImpl> {
         let mut attrs = input.call(Attribute::parse_outer)?;
         let defaultness: Option<Token![default]> = input.parse()?;
         let unsafety: Option<Token![unsafe]> = input.parse()?;
@@ -333,7 +351,7 @@ mod parsing {
         };
 
         let mut first_ty: Type = input.parse()?;
-        let mut self_ty: Type;
+        let self_ty: Type;
         let trait_;
 
         let is_impl_for = input.peek(Token![for]);
@@ -363,11 +381,8 @@ mod parsing {
 
         generics.where_clause = input.parse()?;
 
-        if self_ty == parse_quote! { Self } {
-            let (_, ty_generics, _) = in_generics.split_for_impl();
-            self_ty = parse_quote! { #in_ident #ty_generics };
-            extend_generics(&mut generics, in_generics);
-        } else if !matches!(self_ty, Type::Path(TypePath {
+        if self_ty != parse_quote! { Self }
+            && !matches!(self_ty, Type::Path(TypePath {
                 qself: None,
                 path: Path {
                     leading_colon: None,
@@ -453,7 +468,6 @@ mod parsing {
 
 mod printing {
     use super::*;
-    use quote::{ToTokens, TokenStreamExt};
 
     impl ToTokens for Scope {
         fn to_tokens(&self, tokens: &mut TokenStream) {
