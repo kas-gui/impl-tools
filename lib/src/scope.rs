@@ -3,16 +3,16 @@
 // You may obtain a copy of the License in the LICENSE-APACHE file or at:
 //     https://www.apache.org/licenses/LICENSE-2.0
 
-use crate::fields::Fields;
+use crate::{fields::Fields, SimplePath};
 use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
 use proc_macro_error::emit_error;
-use quote::quote;
+use quote::{ToTokens, TokenStreamExt};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Brace, Comma, Semi};
 use syn::{
-    Attribute, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Path, Result, Token, Type,
-    Variant, Visibility,
+    parse_quote, Attribute, Error, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Path,
+    Result, Token, Type, Variant, Visibility,
 };
 
 /// Attribute rule for [`Scope`]
@@ -29,7 +29,16 @@ pub trait ScopeAttr {
     ///
     /// Note that we cannot use standard path resolution, so we match only a
     /// single path, as defined.
-    fn path(&self) -> &'static [&'static str];
+    fn path(&self) -> SimplePath;
+
+    /// Whether repeated application is valid
+    ///
+    /// If this is false (the default), then an error will be omitted on
+    /// repeated usage of the attribute. This mostly serves to emit better error
+    /// messages in cases where the first application modifies the input.
+    fn support_repetition(&self) -> bool {
+        false
+    }
 
     /// Function type of [`ScopeAttr`] rule
     ///
@@ -104,8 +113,12 @@ impl ScopeItem {
 /// or `union`) followed by any number of implementations, and is parsed into
 /// this struct.
 ///
-/// On its own, `impl_scope!` provides `impl Self` syntax: generics of the type
-/// are attached to the implementation automatically.
+/// On its own, `impl_scope!` provides `impl Self` syntax, with the following
+/// expansion done within [`Self::expand`] (after application [`ScopeAttr`]
+/// rules):
+///
+/// -   `impl Self { ... }` expands to `impl #impl_generics #ty_ident #ty_generics #where_clause { ... }`
+/// -   `impl Self where #clause2 { ... }` expands similarly, but using the combined where clause
 ///
 /// The secondary utility of `impl_scope!` is to allow attribute expansion
 /// within itself via [`ScopeAttr`] rules. These rules may read the type item
@@ -135,74 +148,121 @@ pub struct Scope {
     pub generated: Vec<TokenStream>,
 }
 
+/// Emulate `#[proc_macro]` token parsing
+///
+/// A `#[proc_macro]` accepts either no arguments (`#[foo]`) or an explicit
+/// group of arguments (`#[foo(...)]`, `#[foo[...]]`, `#[foo{...}]`). The macro
+/// implementation does not see the grouping token, but nevertheless only
+/// functions on one of these forms of input. (A third form of attribute,
+/// `#[foo = val]`, exists, but is not usable from `#[proc_macro]`.)
+///
+/// In contrast, [`Attribute::tokens`] contains the raw content following the
+/// attribute's path. This method may be applied to these tokens to emulate
+/// `#[proc_macro]`.
+///
+/// Output is one of:
+///
+/// -   `Ok((Delimiter::None, TokenStream::new()))` when `tokens.is_empty()`
+/// -   `Ok((delimiter, inner_tokens))` when the input `tokens` is an explicit
+///     grouping (`()`, `[]` or `{}`) over `inner_tokens` (in this case,
+///     `delimiter != Delimiter::None`)
+/// -   `Err(_)` if `tokens` is anything else or anything follows the first
+///     group
+pub fn parse_attr_group(tokens: TokenStream) -> Result<(Delimiter, TokenStream)> {
+    let mut iter = tokens.into_iter();
+    let mut delimiter = Delimiter::None;
+    let mut tokens = TokenStream::new();
+    if let Some(tree) = iter.next() {
+        match tree {
+            TokenTree::Group(group) if group.delimiter() != Delimiter::None => {
+                delimiter = group.delimiter();
+                tokens = group.stream();
+            }
+            _ => {
+                return Err(Error::new(
+                    tree.span(),
+                    "expected one of `(`, `::`, `[`, `]`, or `{`",
+                ))
+            }
+        }
+    }
+    if let Some(tree) = iter.next() {
+        return Err(Error::new(tree.span(), "expected `]`"));
+    }
+    Ok((delimiter, tokens))
+}
+
 impl Scope {
     /// Apply attribute rules
     ///
     /// The supplied `rules` are applied in the order of definition, and their
     /// attributes removed from the item.
-    pub fn apply_attrs(&mut self, rules: &[&dyn ScopeAttr]) {
-        fn matches(p: &Path, mut q: &[&str]) -> bool {
-            assert!(!q.is_empty());
-            if p.leading_colon.is_some() {
-                if !q[0].is_empty() {
-                    return false;
-                }
-                q = &q[1..];
-            }
-
-            if p.segments.len() != q.len() {
-                return false;
-            }
-
-            for (x, y) in p.segments.iter().zip(q.iter()) {
-                if x.ident != y || !x.arguments.is_empty() {
-                    return false;
-                }
-            }
-
-            true
-        }
+    pub fn apply_attrs(&mut self, find_rule: impl Fn(&Path) -> Option<&'static dyn ScopeAttr>) {
+        let mut applied: Vec<(Span, *const dyn ScopeAttr)> = Vec::new();
 
         let mut i = 0;
         while i < self.attrs.len() {
-            for rule in rules {
-                if matches(&self.attrs[i].path, rule.path()) {
-                    let attr = self.attrs.remove(i);
-                    let span = attr.span();
+            if let Some(rule) = find_rule(&self.attrs[i].path) {
+                let attr = self.attrs.remove(i);
+                let span = attr.span();
 
-                    // Emulate #[proc_macro]: attr must contain 0 or 1 group
-                    let mut iter = attr.tokens.into_iter();
-                    let mut tokens = TokenStream::new();
-                    if let Some(tree) = iter.next() {
-                        match tree {
-                            TokenTree::Group(group) if group.delimiter() != Delimiter::None => {
-                                tokens = group.stream();
-                            }
-                            _ => {
-                                emit_error!(tree, "expected one of `(`, `::`, `[`, `]`, or `{`");
-                                continue;
-                            }
-                        }
-                    }
-                    if let Some(tree) = iter.next() {
-                        emit_error!(tree, "expected `]`");
+                if !rule.support_repetition() {
+                    // We compare the fat pointer (including vtable address;
+                    // the data may be zero-sized and thus not unique).
+                    // We consider two rules the same when data pointers and
+                    // vtables both compare equal.
+                    let ptr = rule as *const dyn ScopeAttr;
+                    #[allow(clippy::vtable_address_comparisons)]
+                    if let Some(first) = applied.iter().find(|(_, p)| std::ptr::eq(*p, ptr)) {
+                        emit_error!(span, "repeated use of attribute not allowed");
+                        emit_error!(first.0, "first usage here");
                         continue;
                     }
-
-                    if let Err(err) = rule.apply(tokens, span, self) {
-                        emit_error!(err.span(), "{}", err);
-                    }
-                    continue;
+                    applied.push((span, ptr));
                 }
+
+                let tokens = match parse_attr_group(attr.tokens) {
+                    Ok((_, tokens)) => tokens,
+                    Err(err) => {
+                        emit_error!(err);
+                        continue;
+                    }
+                };
+
+                if let Err(err) = rule.apply(tokens, span, self) {
+                    emit_error!(err.span(), "{}", err);
+                }
+                continue;
             }
 
             i += 1;
         }
     }
 
-    /// Generate the result
-    pub fn generate(self) -> TokenStream {
-        quote! { #self }
+    /// Expand `impl Self`
+    ///
+    /// This is done automatically by [`Self::expand`]. It may be called earlier
+    /// by a [`ScopeAttr`] if required. Calling multiple times is harmless.
+    pub fn expand_impl_self(&mut self) {
+        for impl_ in self.impls.iter_mut() {
+            if impl_.self_ty == parse_quote! { Self } {
+                let mut ident = self.ident.clone();
+                ident.set_span(impl_.self_ty.span());
+                let (_, ty_generics, _) = self.generics.split_for_impl();
+                impl_.self_ty = parse_quote! { #ident #ty_generics };
+                extend_generics(&mut impl_.generics, &self.generics);
+            }
+        }
+    }
+
+    /// Generate the [`TokenStream`]
+    ///
+    /// This is a convenience function. It is valid to, instead, (1) call
+    /// [`Self::expand_impl_self`], then (2) use the [`ToTokens`] impl on
+    /// `Scope`.
+    pub fn expand(mut self) -> TokenStream {
+        self.expand_impl_self();
+        self.to_token_stream()
     }
 }
 
@@ -211,10 +271,7 @@ mod parsing {
     use crate::fields::parsing::data_struct;
     use syn::parse::{Parse, ParseStream};
     use syn::spanned::Spanned;
-    use syn::{
-        braced, bracketed, parse_quote, AttrStyle, Error, Field, Lifetime, Path, TypePath,
-        WhereClause,
-    };
+    use syn::{braced, bracketed, AttrStyle, Error, Field, Lifetime, Path, TypePath, WhereClause};
 
     impl Parse for Scope {
         fn parse(input: ParseStream) -> Result<Self> {
@@ -282,7 +339,7 @@ mod parsing {
 
             let mut impls = Vec::new();
             while !input.is_empty() {
-                impls.push(parse_impl(&generics, &ident, input)?);
+                impls.push(parse_impl(&ident, input)?);
             }
 
             Ok(Scope {
@@ -298,11 +355,7 @@ mod parsing {
         }
     }
 
-    fn parse_impl(
-        in_generics: &Generics,
-        in_ident: &Ident,
-        input: ParseStream,
-    ) -> Result<ItemImpl> {
+    fn parse_impl(in_ident: &Ident, input: ParseStream) -> Result<ItemImpl> {
         let mut attrs = input.call(Attribute::parse_outer)?;
         let defaultness: Option<Token![default]> = input.parse()?;
         let unsafety: Option<Token![unsafe]> = input.parse()?;
@@ -324,7 +377,7 @@ mod parsing {
         };
 
         let mut first_ty: Type = input.parse()?;
-        let mut self_ty: Type;
+        let self_ty: Type;
         let trait_;
 
         let is_impl_for = input.peek(Token![for]);
@@ -354,11 +407,8 @@ mod parsing {
 
         generics.where_clause = input.parse()?;
 
-        if self_ty == parse_quote! { Self } {
-            let (_, ty_generics, _) = in_generics.split_for_impl();
-            self_ty = parse_quote! { #in_ident #ty_generics };
-            extend_generics(&mut generics, in_generics);
-        } else if !matches!(self_ty, Type::Path(TypePath {
+        if self_ty != parse_quote! { Self }
+            && !matches!(self_ty, Type::Path(TypePath {
                 qself: None,
                 path: Path {
                     leading_colon: None,
@@ -444,7 +494,6 @@ mod parsing {
 
 mod printing {
     use super::*;
-    use quote::{ToTokens, TokenStreamExt};
 
     impl ToTokens for Scope {
         fn to_tokens(&self, tokens: &mut TokenStream) {

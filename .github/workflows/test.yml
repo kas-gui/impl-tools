@@ -27,7 +27,9 @@ jobs:
           args: --all -- --check
       - name: Build docs
         run: cargo doc --all-features --all --no-deps
-      - name: Test
+      - name: Test impl-tools-lib
+        run: cargo test --manifest-path lib/Cargo.toml --all-features
+      - name: Test impl-tools
         run: cargo test --all-features
       - name: Clippy
         run: cargo clippy --all
@@ -46,7 +48,9 @@ jobs:
           override: true
           components: clippy
 
-      - name: Test
+      - name: Test impl-tools-lib
+        run: cargo test --manifest-path lib/Cargo.toml --all-features
+      - name: Test impl-tools
         run: cargo test --all-features
       - name: Clippy (stable)
         run: cargo clippy --all -- -D warnings -A unknown_lints
@@ -65,5 +69,7 @@ jobs:
           override: true
           components: clippy
 
-      - name: Test
+      - name: Test impl-tools-lib
+        run: cargo test --manifest-path lib/Cargo.toml --all-features --lib --tests
+      - name: Test impl-tools
         run: cargo test --all-features --lib --tests

@@ -116,7 +116,7 @@ use proc_macro::TokenStream;
 use proc_macro_error::{emit_call_site_error, proc_macro_error};
 use syn::parse_macro_input;
 
-use impl_tools_lib::{AttrImplDefault, AutoImpl, ImplDefault, Scope};
+use impl_tools_lib::{autoimpl, AttrImplDefault, ImplDefault, Scope, ScopeAttr};
 
 /// Implement `Default`
 ///
@@ -311,8 +311,19 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_error]
 pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut toks = item.clone();
-    match syn::parse::<AutoImpl>(attr) {
-        Ok(attr) => toks.extend(TokenStream::from(attr.expand(item.into()))),
+    match syn::parse::<autoimpl::Attr>(attr) {
+        Ok(autoimpl::Attr::ForDeref(ai)) => toks.extend(TokenStream::from(ai.expand(item.into()))),
+        Ok(autoimpl::Attr::ImplTraits(ai)) => {
+            // We could use lazy_static to construct a HashMap for fast lookups,
+            // but given the small number of impls a "linear map" is fine.
+            let find_impl = |path: &syn::Path| {
+                autoimpl::STD_IMPLS
+                    .iter()
+                    .cloned()
+                    .find(|impl_| impl_.path().matches_ident_or_path(path))
+            };
+            toks.extend(TokenStream::from(ai.expand(item.into(), find_impl)))
+        }
         Err(err) => {
             emit_call_site_error!(err);
             // Since autoimpl only adds implementations, we can safely output
@@ -383,6 +394,11 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn impl_scope(input: TokenStream) -> TokenStream {
     let mut scope = parse_macro_input!(input as Scope);
-    scope.apply_attrs(&[&AttrImplDefault]);
-    scope.generate().into()
+    scope.apply_attrs(|path| {
+        AttrImplDefault
+            .path()
+            .matches(path)
+            .then(|| &AttrImplDefault as &dyn ScopeAttr)
+    });
+    scope.expand().into()
 }
