@@ -31,6 +31,15 @@ pub trait ScopeAttr {
     /// single path, as defined.
     fn path(&self) -> SimplePath;
 
+    /// Whether repeated application is valid
+    ///
+    /// If this is false (the default), then an error will be omitted on
+    /// repeated usage of the attribute. This mostly serves to emit better error
+    /// messages in cases where the first application modifies the input.
+    fn support_repetition(&self) -> bool {
+        false
+    }
+
     /// Function type of [`ScopeAttr`] rule
     ///
     /// Input arguments:
@@ -189,11 +198,28 @@ impl Scope {
     /// The supplied `rules` are applied in the order of definition, and their
     /// attributes removed from the item.
     pub fn apply_attrs(&mut self, find_rule: impl Fn(&Path) -> Option<&'static dyn ScopeAttr>) {
+        let mut applied: Vec<(Span, *const dyn ScopeAttr)> = Vec::new();
+
         let mut i = 0;
         while i < self.attrs.len() {
             if let Some(rule) = find_rule(&self.attrs[i].path) {
                 let attr = self.attrs.remove(i);
                 let span = attr.span();
+
+                if !rule.support_repetition() {
+                    // We compare the fat pointer (including vtable address;
+                    // the data may be zero-sized and thus not unique).
+                    // We consider two rules the same when data pointers and
+                    // vtables both compare equal.
+                    let ptr = rule as *const dyn ScopeAttr;
+                    #[allow(clippy::vtable_address_comparisons)]
+                    if let Some(first) = applied.iter().find(|(_, p)| std::ptr::eq(*p, ptr)) {
+                        emit_error!(span, "repeated use of attribute not allowed");
+                        emit_error!(first.0, "first usage here");
+                        continue;
+                    }
+                    applied.push((span, ptr));
+                }
 
                 let tokens = match parse_attr_group(attr.tokens) {
                     Ok((_, tokens)) => tokens,
