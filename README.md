@@ -56,7 +56,7 @@ fn main() {
 }
 ```
 
-## Impl Default
+### Impl Default
 
 `#[impl_default]` implements `std::default::Default`:
 
@@ -107,20 +107,24 @@ impl_scope! {
 }
 ```
 
+Caveat: `rustfmt` won't currently touch the contents. Hopefully that
+[can be fixed](https://github.com/rust-lang/rustfmt/issues/5254)!
+
 
 Extensibility
 -------------
 
-Rust's `#[derive]` macro allows downstream crates to add implementations for their own traits
-(via a special `proc-macro` crate). Want to do the same with `#[autoimpl]` and with attributes in
-`impl_scope!`? You can, but the process is a little different:
+Rust's `#[derive]` macro is extensible via `#[proc_macro_derive]` in a `proc-macro` crate. Our macros cannot be extended in the same way, but they can be extended via a new front-end:
 
-1.  Create a copy of the `impl-tools` crate (which is just a thin wrapper around `impl-tools-lib`),
-    and change the name.
-2.  Add your own implementations of [`impl_tools_lib::autoimpl::ImplTrait`] and/or
-    [`impl_tools_lib::ScopeAttr`].
-3.  Modify the `autoimpl` / `impl_scope` attribute definitions to include your implementations.
+1.  Create a copy of the `impl-tools` crate to create a new "front-end" (`proc-macro` crate).
+    This crate is contains only a little code over the [`impl-tools-lib`] crate.
+2.  To extend `#[autoimpl]`, write an impl of [`ImplTrait`] and add it to the attribute's definition.
+    To extend `impl_scope!`, write an impl of [`ScopeAttr`] and add it to the macro's definition.
+3.  Depend on your new front end crate instead of `impl-tools`.
 
+[`impl-tools-lib`]: https://docs.rs/impl-tools-lib/
+[`ImplTrait`]: https://docs.rs/impl-tools-lib/latest/impl_tools_lib/autoimpl/trait.ImplTrait.html
+[`ScopeAttr`]: https://docs.rs/impl-tools-lib/latest/impl_tools_lib/trait.ScopeAttr.html
 
 Supported Rust Versions
 ------------------------------
