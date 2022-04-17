@@ -1,6 +1,11 @@
 Impl-tools
 =======
 
+[![Test Status](https://github.com/kas-gui/impl-tools/workflows/Tests/badge.svg?event=push)](https://github.com/kas-gui/impl-tools/actions)
+[![Latest version](https://img.shields.io/crates/v/impl-tools.svg)](https://crates.io/crates/impl-tools)
+[![API](https://docs.rs/impl-tools/badge.svg)](https://docs.rs/impl-tools)
+[![Minimum rustc version](https://img.shields.io/badge/rustc-1.56+-lightgray.svg)](https://github.com/kas-gui/impl-tools#supported-rust-versions)
+
 A set of helper macros
 
 
@@ -9,12 +14,17 @@ Macros
 
 ### Autoimpl
 
-`#[autoimpl]` is a variant of `#[derive]`, supporting:
+`#[autoimpl]` is a partial replacement for `#[derive]`, supporting:
 
--   explicit generic parameter bounds
--   ignored fields
--   traits defined using a primary field
--   generic re-implementations for traits
+-   Explicit `where` clause on generic parameters
+-   No implicit bounds on generic parameters beyond those required by the type
+-   Traits like `Deref` by `using` a named field
+-   Traits like `Debug` may `ignore` named fields
+
+`#[autoimpl]` may also be used on trait definitions to impl for specified types
+supporting `Deref`.
+
+Unlike [alternatives](#alternatives), `#[autoimpl]` has minimal and intuitive syntax.
 
 ```rust
 use impl_tools::autoimpl;
