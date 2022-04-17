@@ -145,7 +145,7 @@ use impl_tools_lib::{autoimpl, AttrImplDefault, ImplDefault, Scope, ScopeAttr};
 ///
 /// This variant only supports structs. Fields specified as `name: type = expr`
 /// will be initialised with `expr`, while other fields will be initialised with
-/// `Defualt::default()`.
+/// `Default::default()`.
 ///
 /// ```
 /// # use impl_tools::{impl_default, impl_scope};
@@ -208,20 +208,31 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// is supported: `T: trait`; here `trait` is replaced the name of the trait
 /// being implemented.
 ///
-/// # Multi-field traits
+/// # Trait implementation
 ///
-/// Some trait implementations make use of all fields (except those ignored):
+/// The following traits are supported:
 ///
-/// -   `Clone` — implements `std::clone::Clone`; ignored fields are
-///     initialised with `Default::default()`
-/// -   `Debug` — implements `std::fmt::Debug`; ignored fields are not printed
-/// -   `Default` — implements `std::default::Default` using
-///     `Default::default()` for all fields (see also [`impl_default`](macro@impl_default))
+/// | Name | Path | *ignore* | *using* |
+/// |----- |----- |--- |--- |
+/// | `Clone` | `::std::clone::Clone` | initialized with `Default::default()` | - |
+/// | `Debug` | `::std::fmt::Debug` | field is not printed | - |
+/// | `Default` | `::std::default::Default` | - | - |
+/// | `Deref` | `::std::ops::Deref` | - | deref target |
+/// | `DerefMut` | `::std::ops::DerefMut` | - | deref target |
+///
+/// *Ignore:* trait supports ignoring fields (e.g. `#[autoimpl(Debug ignore self.foo)]`).
+///
+/// *Using:* trait requires a named field to "use" (e.g. `#[autoimpl(Deref using self.foo)]`).
+///
+/// Note: [`macro@impl_default`] is a more flexible alternative to [`Default`].
 ///
 /// ### Parameter syntax
 ///
 /// > _ParamsMulti_ :\
-/// > &nbsp;&nbsp; ( _Trait_ ),+ _Ignores_? _WhereClause_?
+/// > &nbsp;&nbsp; ( _Trait_ ),+ _Using_? _Ignores_? _WhereClause_?
+/// >
+/// > _Using_ :\
+/// > &nbsp;&nbsp; `using` `self` `.` _Member_
 /// >
 /// > _Ignores_ :\
 /// > &nbsp;&nbsp; `ignore` ( `self` `.` _Member_ ),+
@@ -251,23 +262,6 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Note: `T: trait` is a special predicate implying that for each
 /// implementation the type `T` must support the trait being implemented.
 ///
-/// # Single-field traits
-///
-/// Other traits are implemented using a single field (for structs):
-///
-/// -   `Deref` — implements `std::ops::Deref`
-/// -   `DerefMut` — implements `std::ops::DerefMut`
-///
-/// ### Parameter syntax
-///
-/// > _ParamsSingle_ :\
-/// > &nbsp;&nbsp; ( _Trait_ ),+ _Using_ _WhereClause_?
-/// >
-/// > _Using_ :\
-/// > &nbsp;&nbsp; `using` `self` `.` _Member_
-///
-/// ### Examples
-///
 /// Implement `Deref` and `DerefMut`, dereferencing to the given field:
 /// ```
 /// # use impl_tools::autoimpl;
@@ -275,7 +269,7 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// struct MyWrapper<T>(T);
 /// ```
 ///
-/// # Trait re-implementations
+/// # Trait re-implementation
 ///
 /// User-defined traits may be implemented over any type supporting `Deref`
 /// (and if required `DerefMut`) to another type supporting the trait.

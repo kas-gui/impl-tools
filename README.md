@@ -131,9 +131,6 @@ Supported Rust Versions
 
 The MSRV is 1.56.0 for no particular reason other than that it is the first to support Edition 2021.
 
-Using a nightly compiler allows improved diagnostics, but otherwise stable Rust
-is fully supported.
-
 `no_std` is not yet supported (see #7).
 
 
