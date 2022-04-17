@@ -7,105 +7,26 @@
 
 //! # Impl-tools
 //!
-//! ## Autoimpl
+//! `#[autoimpl]` is a partial replacement for `#[derive]`, supporting:
 //!
-//! `#[autoimpl]` is a variant of `#[derive]`, supporting:
+//! -   Explicit `where` clause on generic parameters
+//! -   No implicit bounds on generic parameters beyond those required by the type
+//! -   Traits like `Deref` by `using` a named field
+//! -   Traits like `Debug` may `ignore` named fields
 //!
-//! -   explicit generic parameter bounds
-//! -   ignored fields
-//! -   traits defined using a primary field
-//! -   generic re-implementations for traits
-//!
-//! ```
-//! use impl_tools::autoimpl;
-//! use std::fmt::Debug;
-//!
-//! #[autoimpl(for<'a, T: trait + ?Sized> Box<T>)]
-//! // Generates: impl<'a, T: Animal + ?Sized> Animal for Box<T> { .. }
-//! trait Animal {
-//!     fn number_of_legs(&self) -> u32;
-//! }
-//!
-//! #[autoimpl(Debug ignore self.animal where T: Debug)]
-//! // Generates: impl<T, A: Animal> std::fmt::Debug for Named<A> where T: Debug { .. }
-//! #[autoimpl(Deref, DerefMut using self.animal)]
-//! // Generates: impl<T, A: Animal> std::ops::Deref for Named<A> { .. }
-//! // Generates: impl<T, A: Animal> std::ops::DerefMut for Named<A> { .. }
-//! struct Named<T, A: Animal> {
-//!     name: T,
-//!     animal: A,
-//! }
-//!
-//! fn main() {
-//!     struct Fish;
-//!     impl Animal for Fish {
-//!         fn number_of_legs(&self) -> u32 {
-//!             0
-//!         }
-//!     }
-//!
-//!     let my_fish = Named {
-//!         name: "Nemo",
-//!         animal: Box::new(Fish),
-//!     };
-//!
-//!     assert_eq!(
-//!         format!("{my_fish:?} has {} legs!", my_fish.number_of_legs()),
-//!         r#"Named { name: "Nemo", .. } has 0 legs!"#
-//!     );
-//! }
-//! ```
-//!
-//! ## Derive Default
-//!
-//! `#[impl_default]` implements `std::default::Default`:
-//!
-//! ```
-//! use impl_tools::{impl_default, impl_scope};
-//!
-//! #[impl_default(Tree::Ash)]
-//! enum Tree { Ash, Beech, Birch, Willow }
-//!
-//! impl_scope! {
-//!     #[impl_default]
-//!     struct Copse {
-//!         tree_type: Tree,
-//!         number: u32 = 7,
-//!     }
-//! }
-//! ```
-//!
-//! ## Impl Scope
+//! `#[autoimpl]` may also be used on trait definitions to *re-implement* the
+//! trait for given reference types.
 //!
 //! `impl_scope!` is a function-like macro used to define a type plus its
-//! implementations. It supports `impl Self` syntax:
+//! implementations. It supports two things:
 //!
-//! ```
-//! use impl_tools::impl_scope;
-//! use std::fmt::Display;
+//! -   `impl Self` syntax
+//! -   Evaluation of advanced attribute macros, which may use field
+//!     initializers and read/write other impls within the scope
 //!
-//! impl_scope! {
-//!     /// I don't know why this exists
-//!     pub struct NamedThing<T: Display, F> {
-//!         name: T,
-//!         func: F,
-//!     }
-//!
-//!     // Repeats generic parameters of type
-//!     impl Self {
-//!         fn format_name(&self) -> String {
-//!             format!("{}", self.name)
-//!         }
-//!     }
-//!
-//!     // Merges generic parameters of type
-//!     impl<O> Self where F: Fn(&str) -> O {
-//!         fn invoke(&self) -> O {
-//!             (self.func)(&self.format_name())
-//!         }
-//!     }
-//! }
-//! ```
+//! User-extensions to both `#[autoimpl]` and `impl_scope!` are possible, by
+//! writing your own proc-macro crate depending on
+//! [impl-tools-lib](https://crates.io/crates/impl-tools-lib).
 
 #[cfg(doctest)]
 doc_comment::doctest!("../README.md");
@@ -118,11 +39,11 @@ use syn::parse_macro_input;
 
 use impl_tools_lib::{autoimpl, AttrImplDefault, ImplDefault, Scope, ScopeAttr};
 
-/// Implement `Default`
+/// Impl `Default` with given field or type initializers
 ///
 /// This macro may be used in one of two ways.
 ///
-/// ### Type-level initialiser
+/// ### Type-level initializer
 ///
 /// ```
 /// # use impl_tools::impl_default;
@@ -141,15 +62,14 @@ use impl_tools_lib::{autoimpl, AttrImplDefault, ImplDefault, Scope, ScopeAttr};
 ///
 /// A where clause is optional: `#[impl_default(EXPR where BOUNDS)]`.
 ///
-/// ### Field-level initialiser
+/// ### Field-level initializer
 ///
 /// This variant only supports structs. Fields specified as `name: type = expr`
-/// will be initialised with `expr`, while other fields will be initialised with
+/// will be initialized with `expr`, while other fields will be initialized with
 /// `Default::default()`.
 ///
 /// ```
 /// # use impl_tools::{impl_default, impl_scope};
-///
 /// impl_scope! {
 ///     #[impl_default]
 ///     struct Person {
@@ -185,32 +105,18 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// A variant of the standard `derive` macro
 ///
-/// This macro is similar to `#[derive(Trait)]`, but with a few differences.
+/// `#[autoimpl]` may be used in two ways:
+///
+/// -   On a type definition, to implement a specified trait (like `#[derive]`)
+/// -   On a trait definition, to re-implement that trait for a specified type
+///     supporting [`Deref`]
 ///
 /// If using `autoimpl` **and** `derive` macros with Rust < 1.57.0, the
 /// `autoimpl` attribute must come first (see rust#81119).
 ///
-/// Unlike `derive`, `autoimpl` is not extensible by third-party crates. The
-/// "trait names" provided to `autoimpl` are matched directly, unlike
-/// `derive(...)` arguments which are paths to [`proc_macro_derive`] instances.
-/// Without language support for this there appears to be no option for
-/// third-party extensions.
-///
 /// [`proc_macro_derive`]: https://doc.rust-lang.org/reference/procedural-macros.html#derive-macros
 ///
-/// ### Bounds on generic parameters
-///
-/// If a type has generic parameters, generated implementations will assume the
-/// same parameters and bounds as specified in the type, but not additional
-/// bounds for the trait implemented.
-///
-/// Additional bounds may be specified via a `where` clause. A special predicate
-/// is supported: `T: trait`; here `trait` is replaced the name of the trait
-/// being implemented.
-///
 /// # Trait implementation
-///
-/// The following traits are supported:
 ///
 /// | Name | Path | *ignore* | *using* |
 /// |----- |----- |--- |--- |
@@ -222,9 +128,11 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// *Ignore:* trait supports ignoring fields (e.g. `#[autoimpl(Debug ignore self.foo)]`).
 ///
-/// *Using:* trait requires a named field to "use" (e.g. `#[autoimpl(Deref using self.foo)]`).
+/// *Using:* trait requires a named field to "use". Example:
+/// `#[autoimpl(Deref using self.foo)]` implements [`Deref`] to return (a
+/// reference to) field `self.foo`.
 ///
-/// Note: [`macro@impl_default`] is a more flexible alternative to [`Default`].
+/// Note: [`macro@impl_default`] is a more flexible alternative to `Default`.
 ///
 /// ### Parameter syntax
 ///
@@ -239,6 +147,16 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// >
 /// > _WhereClause_ :\
 /// > &nbsp;&nbsp; `where` ( _WherePredicate_ ),*
+///
+/// ### Generics and where clause
+///
+/// Type generics are inherited from the type definition. Bounds defined by the
+/// type are inherited, but unlike `#[derive]` no additional bounds for the
+/// trait being implemented are assumed.
+///
+/// A `where` clause, e.g. `where T: Foo`, may be used.
+/// A special bound syntax, `T: trait`, indicates that `T` must support the
+/// trait being implemented.
 ///
 /// ### Examples
 ///
@@ -259,14 +177,12 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// #[autoimpl(Clone, Debug where T: trait)]
 /// struct Wrapper<T>(pub T);
 /// ```
-/// Note: `T: trait` is a special predicate implying that for each
-/// implementation the type `T` must support the trait being implemented.
 ///
 /// Implement `Deref` and `DerefMut`, dereferencing to the given field:
 /// ```
 /// # use impl_tools::autoimpl;
-/// #[autoimpl(Deref, DerefMut using self.0)]
-/// struct MyWrapper<T>(T);
+/// #[autoimpl(Deref, DerefMut using self.1)]
+/// struct AnnotatedWrapper<T>(String, T);
 /// ```
 ///
 /// # Trait re-implementation
@@ -301,6 +217,8 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// Note further: if the trait uses generic parameters itself, these must be
 /// introduced explicitly in the `for<..>` parameter list.
+///
+/// [`Deref`]: std::ops::Deref
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -327,13 +245,16 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
     toks
 }
 
-/// Implementation scope
+/// Scope supporting `impl Self` and advanced attribute macros
 ///
-/// Supports `impl Self` syntax.
+/// This macro has three raisons d'être:
 ///
-/// Also supports struct field assignment syntax for `Default`: see [`impl_default`](macro@impl_default).
+/// -   To support `impl Self` syntax
+/// -   To allow field initializers, as used by [`macro@impl_default`]
+/// -   To allow user-defined attribute macros to read/write other impls within
+///     the `impl_scope`
 ///
-/// Caveat: `rustfmt` will not format contents (see
+/// Caveat: `rustfmt` can not yet format contents (see
 /// [rustfmt#5254](https://github.com/rust-lang/rustfmt/issues/5254)).
 ///
 /// ## Syntax
@@ -344,42 +265,32 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// > _ScopeItem_ :\
 /// > &nbsp;&nbsp; _ItemEnum_ | _ItemStruct_ | _ItemType_ | _ItemUnion_
 ///
-/// The result looks a little like a module containing a single type definition
-/// plus its implementations, but is injected into the parent module.
+/// That is, one type definition followed by a set of implementations.
+/// Impls must take one of two forms:
 ///
-/// Implementations must target the type defined at the start of the scope. A
-/// special syntax for the target type, `Self`, is added:
+/// -   `impl Self { ... }` — generic parameters and bounds of the type are used
+/// -   `impl MyType { ... }` where `MyType` matches the name of the defined type
 ///
-/// > _ScopeImplItem_ :\
-/// > &nbsp;&nbsp; `impl` _GenericParams_? _ForTrait_? _ScopeImplTarget_ _WhereClause_? `{`
-/// > &nbsp;&nbsp; &nbsp;&nbsp; _InnerAttribute_*
-/// > &nbsp;&nbsp; &nbsp;&nbsp; _AssociatedItem_*
-/// > &nbsp;&nbsp; `}`
-/// >
-/// > _ScopeImplTarget_ :\
-/// > &nbsp;&nbsp; `Self` | _TypeName_ _GenericParams_?
-///
-/// That is, implementations may take one of two forms:
-///
-/// -   `impl MyType { ... }`
-/// -   `impl Self { ... }`
-///
-/// Generic parameters from the type are included automatically, with bounds as
-/// defined on the type. Additional generic parameters and an additional where
-/// clause are supported (generic parameter lists and bounds are merged).
+/// Generic parameters from the type are included implicitly with the first form.
+/// Additional generic parameters and where clauses are supported (parameters
+/// and bounds are merged).
 ///
 /// ## Example
 ///
 /// ```
-/// use impl_tools::impl_scope;
-/// use std::ops::Add;
-///
-/// impl_scope! {
+/// impl_tools::impl_scope! {
 ///     struct Pair<T>(T, T);
 ///
-///     impl Self where T: Clone + Add {
-///         fn sum(&self) -> <T as Add>::Output {
-///             self.0.clone().add(self.1.clone())
+///     impl Self {
+///         pub fn new(a: T, b: T) -> Self {
+///             Pair(a, b)
+///         }
+///     }
+///
+///     impl Self where T: Clone {
+///         pub fn splat(a: T) -> Self {
+///             let b = a.clone();
+///             Pair(a, b)
 ///         }
 ///     }
 /// }
