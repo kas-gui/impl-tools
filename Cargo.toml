@@ -1,6 +1,6 @@
 [package]
 name = "impl-tools"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Diggory Hardy <git@dhardy.name>"]
 edition = "2021"
 license = "MIT/Apache-2.0"
