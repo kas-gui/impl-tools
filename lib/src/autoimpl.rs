@@ -345,11 +345,11 @@ pub const STD_IMPLS: &[&dyn ImplTrait] = &[
     &ImplDerefMut,
 ];
 
-/// Implement [`std::clone::Clone`]
+/// Implement [`core::clone::Clone`]
 pub struct ImplClone;
 impl ImplTrait for ImplClone {
     fn path(&self) -> SimplePath {
-        SimplePath::new(&["", "std", "clone", "Clone"])
+        SimplePath::new(&["", "core", "clone", "Clone"])
     }
 
     fn support_ignore(&self) -> bool {
@@ -397,11 +397,11 @@ impl ImplTrait for ImplClone {
     }
 }
 
-/// Implement [`std::fmt::Debug`]
+/// Implement [`core::fmt::Debug`]
 pub struct ImplDebug;
 impl ImplTrait for ImplDebug {
     fn path(&self) -> SimplePath {
-        SimplePath::new(&["", "std", "fmt", "Debug"])
+        SimplePath::new(&["", "core", "fmt", "Debug"])
     }
 
     fn support_ignore(&self) -> bool {
@@ -455,18 +455,18 @@ impl ImplTrait for ImplDebug {
             Fields::Unit => inner = quote! { f.write_str(#type_name) },
         };
         Ok(quote! {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
                 #inner
             }
         })
     }
 }
 
-/// Implement [`std::default::Default`]
+/// Implement [`core::default::Default`]
 pub struct ImplDefault;
 impl ImplTrait for ImplDefault {
     fn path(&self) -> SimplePath {
-        SimplePath::new(&["", "std", "default", "Default"])
+        SimplePath::new(&["", "core", "default", "Default"])
     }
 
     fn support_ignore(&self) -> bool {
@@ -506,11 +506,11 @@ impl ImplTrait for ImplDefault {
     }
 }
 
-/// Implement [`std::ops::Deref`]
+/// Implement [`core::ops::Deref`]
 pub struct ImplDeref;
 impl ImplTrait for ImplDeref {
     fn path(&self) -> SimplePath {
-        SimplePath::new(&["", "std", "ops", "Deref"])
+        SimplePath::new(&["", "core", "ops", "Deref"])
     }
 
     fn support_ignore(&self) -> bool {
@@ -537,11 +537,11 @@ impl ImplTrait for ImplDeref {
     }
 }
 
-/// Implement [`std::ops::DerefMut`]
+/// Implement [`core::ops::DerefMut`]
 pub struct ImplDerefMut;
 impl ImplTrait for ImplDerefMut {
     fn path(&self) -> SimplePath {
-        SimplePath::new(&["", "std", "ops", "DerefMut"])
+        SimplePath::new(&["", "core", "ops", "DerefMut"])
     }
 
     fn support_ignore(&self) -> bool {

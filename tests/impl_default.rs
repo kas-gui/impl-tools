@@ -1,4 +1,8 @@
 #![allow(unused)]
+// Test no_std
+#![no_std]
+extern crate alloc;
+use alloc::string::{String, ToString};
 
 use impl_tools::{impl_default, impl_scope};
 

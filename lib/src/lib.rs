@@ -49,9 +49,12 @@ impl SimplePath {
 
     /// True if this matches a [`syn::Path`]
     ///
-    /// This must match the path exactly, with one exception: if `path` has no
-    /// leading colon but `self` does (empty first component), then `path` may
-    /// still match the remaining components of `self`.
+    /// This must match the path exactly, with two exceptions:
+    ///
+    /// -   if `path` has no leading colon but `self` does (empty first
+    ///     component), the paths may still match
+    /// -   if the first component of `self` is `core` or `alloc` but the first
+    ///     component of `path` is `std`, the paths may still match
     pub fn matches(&self, path: &syn::Path) -> bool {
         let mut q = self.0;
         assert!(!q.is_empty());
@@ -66,10 +69,20 @@ impl SimplePath {
             return false;
         }
 
+        let mut first = true;
         for (x, y) in path.segments.iter().zip(q.iter()) {
-            if x.ident != y || !x.arguments.is_empty() {
+            if !x.arguments.is_empty() {
                 return false;
             }
+
+            #[allow(clippy::if_same_then_else)]
+            if x.ident == y {
+            } else if first && (*y == "core" || *y == "alloc") && x.ident == "std" {
+            } else {
+                return false;
+            }
+
+            first = false;
         }
 
         true

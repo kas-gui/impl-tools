@@ -1,13 +1,18 @@
 //! Test #[autoimpl] for trait implementations
 
+// Test no_std
+#![no_std]
+extern crate alloc;
+use alloc::format;
+
+use core::fmt::Debug;
+use core::marker::PhantomData;
+use core::ops::DerefMut;
 use impl_tools::autoimpl;
-use std::fmt::Debug;
-use std::marker::PhantomData;
-use std::ops::DerefMut;
 
 fn test_has_clone(_: impl Clone) {}
 
-#[autoimpl(std::clone::Clone, std::fmt::Debug)]
+#[autoimpl(std::clone::Clone, core::fmt::Debug)]
 struct Unit;
 
 #[test]
