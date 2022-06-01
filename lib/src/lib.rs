@@ -75,6 +75,7 @@ impl SimplePath {
                 return false;
             }
 
+            #[allow(clippy::if_same_then_else)]
             if x.ident == y {
             } else if first && (*y == "core" || *y == "alloc") && x.ident == "std" {
             } else {
