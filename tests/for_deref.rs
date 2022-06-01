@@ -1,7 +1,12 @@
 //! Test #[autoimpl] for trait references
 
+// Test no_std
+#![no_std]
+extern crate alloc;
+use alloc::boxed::Box;
+
+use core::fmt::Debug;
 use impl_tools::autoimpl;
-use std::fmt::Debug;
 
 #[autoimpl(for<'a, T: trait> &'a mut T, Box<T>)]
 trait Z {

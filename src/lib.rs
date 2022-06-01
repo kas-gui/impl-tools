@@ -126,13 +126,24 @@ pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// | `Deref` | `::std::ops::Deref` | - | deref target |
 /// | `DerefMut` | `::std::ops::DerefMut` | - | deref target |
 ///
+/// Note: [`macro@impl_default`] is a more flexible alternative to `Default`.
+///
 /// *Ignore:* trait supports ignoring fields (e.g. `#[autoimpl(Debug ignore self.foo)]`).
 ///
 /// *Using:* trait requires a named field to "use". Example:
 /// `#[autoimpl(Deref using self.foo)]` implements [`Deref`] to return (a
 /// reference to) field `self.foo`.
 ///
-/// Note: [`macro@impl_default`] is a more flexible alternative to `Default`.
+/// Traits are matched according to the path, via one of three forms:
+///
+/// -   Only the last component, e.g. `#[autoimpl(Clone)]`
+/// -   The full path except leading `::`, e.g. `#[autoimpl(std::clone::Clone)]`
+/// -   The full path with leading `::`, e.g. `#[autoimpl(::std::clone::Clone)]`
+///
+/// Note regarding `no_std` usage: the above table is wrong in that traits use
+/// paths in `core` or `alloc`, but also match `std`. That is,
+/// `#[autoimpl(std::clone::Clone)]` and `#[autoimpl(core::clone::Clone)]` are
+/// equivalent and generate an impl for `::core::clone::Clone`.
 ///
 /// ### Parameter syntax
 ///
