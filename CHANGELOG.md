@@ -2,6 +2,11 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2022-08-19
+
+Change signature of `ScopeAttr::apply`: replace `args: TokenStream, attr_span: Span`
+with `attr: Attribute` (#15).
+
 ## [0.3.2] — 2022-06-01
 
 Support `no_std`. Support matching standard traits via paths from `core`/`alloc`
