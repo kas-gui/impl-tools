@@ -90,9 +90,9 @@ use impl_tools_lib::{autoimpl, AttrImplDefault, ImplDefault, Scope, ScopeAttr};
 /// A where clause is optional: `#[impl_default(where BOUNDS)]`.
 #[proc_macro_attribute]
 #[proc_macro_error]
-pub fn impl_default(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
     let mut toks = item.clone();
-    match syn::parse::<ImplDefault>(attr) {
+    match syn::parse::<ImplDefault>(args) {
         Ok(attr) => toks.extend(TokenStream::from(attr.expand(item.into()))),
         Err(err) => {
             emit_call_site_error!(err);

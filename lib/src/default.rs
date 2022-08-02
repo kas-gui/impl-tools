@@ -10,7 +10,8 @@ use proc_macro2::{Span, TokenStream};
 use proc_macro_error::emit_error;
 use quote::quote;
 use syn::parse::{Error, Parse, ParseStream, Result};
-use syn::{parse2, Expr, Generics, Ident, Item, Token};
+use syn::spanned::Spanned;
+use syn::{parse2, Attribute, Expr, Generics, Ident, Item, Token};
 
 /// `#[impl_default]` attribute
 pub struct ImplDefault {
@@ -79,6 +80,17 @@ impl ImplDefault {
             }
         }
     }
+
+    fn parse_attr(attr: Attribute) -> Result<Self> {
+        if attr.tokens.is_empty() {
+            return Ok(ImplDefault {
+                expr: None,
+                where_clause: None,
+                span: attr.span(),
+            });
+        }
+        attr.parse_args()
+    }
 }
 
 /// [`ScopeAttr`] rule enabling `#[impl_default]` within `impl_scope!`
@@ -88,13 +100,13 @@ impl ScopeAttr for AttrImplDefault {
         SimplePath(&["impl_default"])
     }
 
-    fn apply(&self, args: TokenStream, attr_span: Span, scope: &mut Scope) -> Result<()> {
-        let attr: ImplDefault = syn::parse2(args)?;
+    fn apply(&self, attr: Attribute, scope: &mut Scope) -> Result<()> {
+        let args = ImplDefault::parse_attr(attr)?;
 
-        if attr.expr.is_some() {
+        if args.expr.is_some() {
             scope
                 .generated
-                .push(attr.gen_expr(&scope.ident, &scope.generics));
+                .push(args.gen_expr(&scope.ident, &scope.generics));
         } else {
             let fields = match &mut scope.item {
                 ScopeItem::Struct { fields, .. } => match fields {
@@ -114,7 +126,7 @@ impl ScopeAttr for AttrImplDefault {
                 },
                 _ => {
                     return Err(Error::new(
-                        attr_span,
+                        args.span,
                         "must specify value as `#[impl_default(value)]` on non-struct type",
                     ));
                 }
@@ -123,7 +135,7 @@ impl ScopeAttr for AttrImplDefault {
             let ident = &scope.ident;
             let (impl_generics, ty_generics, _) = scope.generics.split_for_impl();
             let wc = clause_to_toks(
-                &attr.where_clause,
+                &args.where_clause,
                 scope.generics.where_clause.as_ref(),
                 &quote! { Default },
             );
