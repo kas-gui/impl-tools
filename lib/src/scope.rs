@@ -4,15 +4,15 @@
 //     https://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{fields::Fields, SimplePath};
-use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
+use proc_macro2::{Span, TokenStream};
 use proc_macro_error::emit_error;
 use quote::{ToTokens, TokenStreamExt};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Brace, Comma, Semi};
 use syn::{
-    parse_quote, Attribute, Error, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Path,
-    Result, Token, Type, Variant, Visibility,
+    parse_quote, Attribute, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Path, Result,
+    Token, Type, Variant, Visibility,
 };
 
 /// Attribute rule for [`Scope`]
@@ -44,16 +44,12 @@ pub trait ScopeAttr {
     ///
     /// Input arguments:
     ///
-    /// -   `args`: attribute arguments. As with `#[proc_macro_attribute]`
-    ///     macros, this is either empty or the contents of a single grouping token
-    ///     (`()`, `{}` or `[]`).
-    /// -   `span`: the span of the whole attribute. Note that [`Span::call_site`]
-    ///     will return the span of the whole `impl_scope!` macro call. Use this
-    ///     instead when reporting errors on the attribute.
+    /// -   `attr`: the invoking attribute. It is suggested to parse arguments
+    ///     using [`Attribute::parse_args`] or [`Attribute::parse_args_with`].
     /// -   `scope`: mutable reference to the implementation scope. Usually
     ///     an attribute rule function will read data from the scope and append its
     ///     output to [`Scope::generated`].
-    fn apply(&self, args: TokenStream, span: Span, scope: &mut Scope) -> Result<()>;
+    fn apply(&self, attr: Attribute, scope: &mut Scope) -> Result<()>;
 }
 
 /// Content of items supported by [`Scope`] that are not common to all variants
@@ -148,50 +144,6 @@ pub struct Scope {
     pub generated: Vec<TokenStream>,
 }
 
-/// Emulate `#[proc_macro]` token parsing
-///
-/// A `#[proc_macro]` accepts either no arguments (`#[foo]`) or an explicit
-/// group of arguments (`#[foo(...)]`, `#[foo[...]]`, `#[foo{...}]`). The macro
-/// implementation does not see the grouping token, but nevertheless only
-/// functions on one of these forms of input. (A third form of attribute,
-/// `#[foo = val]`, exists, but is not usable from `#[proc_macro]`.)
-///
-/// In contrast, [`Attribute::tokens`] contains the raw content following the
-/// attribute's path. This method may be applied to these tokens to emulate
-/// `#[proc_macro]`.
-///
-/// Output is one of:
-///
-/// -   `Ok((Delimiter::None, TokenStream::new()))` when `tokens.is_empty()`
-/// -   `Ok((delimiter, inner_tokens))` when the input `tokens` is an explicit
-///     grouping (`()`, `[]` or `{}`) over `inner_tokens` (in this case,
-///     `delimiter != Delimiter::None`)
-/// -   `Err(_)` if `tokens` is anything else or anything follows the first
-///     group
-pub fn parse_attr_group(tokens: TokenStream) -> Result<(Delimiter, TokenStream)> {
-    let mut iter = tokens.into_iter();
-    let mut delimiter = Delimiter::None;
-    let mut tokens = TokenStream::new();
-    if let Some(tree) = iter.next() {
-        match tree {
-            TokenTree::Group(group) if group.delimiter() != Delimiter::None => {
-                delimiter = group.delimiter();
-                tokens = group.stream();
-            }
-            _ => {
-                return Err(Error::new(
-                    tree.span(),
-                    "expected one of `(`, `::`, `[`, `]`, or `{`",
-                ))
-            }
-        }
-    }
-    if let Some(tree) = iter.next() {
-        return Err(Error::new(tree.span(), "expected `]`"));
-    }
-    Ok((delimiter, tokens))
-}
-
 impl Scope {
     /// Apply attribute rules
     ///
@@ -204,13 +156,13 @@ impl Scope {
         while i < self.attrs.len() {
             if let Some(rule) = find_rule(&self.attrs[i].path) {
                 let attr = self.attrs.remove(i);
-                let span = attr.span();
 
                 if !rule.support_repetition() {
                     // We compare the fat pointer (including vtable address;
                     // the data may be zero-sized and thus not unique).
                     // We consider two rules the same when data pointers and
                     // vtables both compare equal.
+                    let span = attr.span();
                     let ptr = rule as *const dyn ScopeAttr;
                     #[allow(clippy::vtable_address_comparisons)]
                     if let Some(first) = applied.iter().find(|(_, p)| std::ptr::eq(*p, ptr)) {
@@ -221,15 +173,7 @@ impl Scope {
                     applied.push((span, ptr));
                 }
 
-                let tokens = match parse_attr_group(attr.tokens) {
-                    Ok((_, tokens)) => tokens,
-                    Err(err) => {
-                        emit_error!(err);
-                        continue;
-                    }
-                };
-
-                if let Err(err) = rule.apply(tokens, span, self) {
+                if let Err(err) = rule.apply(attr, self) {
                     emit_error!(err.span(), "{}", err);
                 }
                 continue;

@@ -20,7 +20,7 @@ mod scope;
 
 pub use default::{AttrImplDefault, ImplDefault};
 pub use for_deref::ForDeref;
-pub use scope::{parse_attr_group, Scope, ScopeAttr, ScopeItem};
+pub use scope::{Scope, ScopeAttr, ScopeItem};
 
 /// Simple, allocation-free path representation
 pub struct SimplePath(&'static [&'static str]);
