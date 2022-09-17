@@ -89,9 +89,12 @@ fn gat() {
     impl Gat for S {
         type T<X> = X;
 
-        type R<'a, X> = &'a X
+        // Our MSRV doesn't support the preferred location!
+        #[allow(deprecated_where_clause_location)]
+        type R<'a, X>
         where
-            X: 'a;
+            X: 'a,
+        = &'a X;
     }
 
     fn impls_gat(_: impl Gat) {}
