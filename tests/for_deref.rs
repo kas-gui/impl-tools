@@ -76,6 +76,10 @@ fn g() {
 #[autoimpl(for<A: trait> Box<A>)]
 trait Gat {
     type T<X>;
+
+    type R<'a, X>: core::ops::Deref<Target = Self::T<X>>
+    where
+        X: 'a;
 }
 
 #[cfg(rustc_1_65)]
@@ -84,6 +88,10 @@ fn gat() {
     struct S;
     impl Gat for S {
         type T<X> = X;
+
+        type R<'a, X> = &'a X
+        where
+            X: 'a;
     }
 
     fn impls_gat(_: impl Gat) {}
