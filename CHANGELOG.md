@@ -2,9 +2,15 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] — 2022-09-17
+
+-   Correct release of 0.4.1 (which bumped the version of impl-tools without
+    bumping impl-tools-lib) (#18)
+-   Fix `#[autoimpl]` on traits for GATs and attributes on trait const/method/type items (#17)
+
 ## [0.4.1] — 2022-09-17
 
--   Fix `#[autoimpl]` on traits for GATs and attributes on trait const/method/type items (#17)
+No changes (prefer 0.4.2 instead).
 
 ## [0.4.0] — 2022-08-19
 
