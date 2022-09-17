@@ -71,3 +71,21 @@ fn g() {
     impls_g(Box::new(S) as Box<dyn G<i32>>);
     impls_g(&mut (Box::new(S) as Box<dyn G<i32>>));
 }
+
+#[autoimpl(for<A: trait> Box<A>)]
+trait Gat {
+    type T<X>;
+}
+
+#[test]
+fn gat() {
+    struct S;
+    impl Gat for S {
+        type T<X> = X;
+    }
+
+    fn impls_gat(_: impl Gat) {}
+
+    impls_gat(S);
+    impls_gat(Box::new(S));
+}
