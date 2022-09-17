@@ -34,6 +34,27 @@ jobs:
       - name: Clippy
         run: cargo clippy --all
 
+  beta:
+    name: Beta on MacOS
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: beta
+          override: true
+          components: clippy
+
+      - name: Test impl-tools-lib
+        run: cargo test --manifest-path lib/Cargo.toml --all-features
+      - name: Test impl-tools
+        run: cargo test --all-features
+      - name: Clippy (beta)
+        run: cargo clippy --all -- -D warnings -A unknown_lints
+
   stable:
     name: Stable on Windows
     runs-on: windows-latest

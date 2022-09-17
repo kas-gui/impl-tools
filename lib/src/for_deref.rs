@@ -11,15 +11,37 @@ use crate::generics::{
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::emit_error;
 use quote::{quote, ToTokens, TokenStreamExt};
+use std::{iter, slice};
 use syn::punctuated::Punctuated;
-use syn::token::Comma;
-use syn::{parse2, FnArg, Ident, Item, Path, PathArguments, Token, TraitItem, Type, TypePath};
+use syn::token::{Colon2, Comma, Eq};
+use syn::{Attribute, FnArg, Ident, Item, Token, TraitItem, Type, TypePath};
 
 /// Autoimpl for types supporting `Deref`
 pub struct ForDeref {
     generics: Generics,
     definitive: Ident,
     targets: Punctuated<Type, Comma>,
+}
+
+// Copied from syn
+trait FilterAttrs<'a> {
+    type Ret: Iterator<Item = &'a Attribute>;
+
+    fn outer(self) -> Self::Ret;
+}
+
+impl<'a> FilterAttrs<'a> for &'a [Attribute] {
+    type Ret = iter::Filter<slice::Iter<'a, Attribute>, fn(&&Attribute) -> bool>;
+
+    fn outer(self) -> Self::Ret {
+        fn is_outer(attr: &&Attribute) -> bool {
+            match attr.style {
+                syn::AttrStyle::Outer => true,
+                syn::AttrStyle::Inner(_) => false,
+            }
+        }
+        self.iter().filter(is_outer)
+    }
 }
 
 mod parsing {
@@ -60,24 +82,13 @@ mod parsing {
                         if let WherePredicate::Type(pred) = pred {
                             for bound in &pred.bounds {
                                 if matches!(bound, TypeParamBound::TraitSubst(_)) {
-                                    match pred.bounded_ty {
-                                        Type::Path(TypePath {
-                                            qself: None,
-                                            path:
-                                                Path {
-                                                    leading_colon: None,
-                                                    ref segments,
-                                                },
-                                        }) if segments.len() == 1
-                                            && matches!(
-                                                segments[0].arguments,
-                                                PathArguments::None
-                                            ) =>
-                                        {
-                                            definitive = Some(segments[0].ident.clone());
+                                    if let Type::Path(TypePath { qself: None, path }) =
+                                        &pred.bounded_ty
+                                    {
+                                        if let Some(ident) = path.get_ident() {
+                                            definitive = Some(ident.clone());
                                             break;
                                         }
-                                        _ => (),
                                     }
                                 }
                             }
@@ -108,9 +119,9 @@ impl ForDeref {
     /// Expand over the given `item`
     ///
     /// This attribute does not modify the item.
-    /// The caller should append the result to `item` tokens.
+    /// The caller should append the result to `item` impl_items.
     pub fn expand(self, item: TokenStream) -> TokenStream {
-        let item = match parse2::<Item>(item) {
+        let item = match syn::parse2::<Item>(item) {
             Ok(Item::Trait(item)) => item,
             Ok(item) => {
                 emit_error!(item, "expected trait");
@@ -137,34 +148,53 @@ impl ForDeref {
 
         let mut toks = TokenStream::new();
         for target in self.targets {
+            // Tokenize, like ToTokens impls for syn::TraitItem*, but for definition
             let mut impl_items = TokenStream::new();
+            let tokens = &mut impl_items;
             for item in &item.items {
                 match item {
                     TraitItem::Const(item) => {
-                        let ident = &item.ident;
-                        let ty = &item.ty;
-                        impl_items.append_all(quote! {
-                            const #ident : #ty = #definitive :: #ident;
-                        });
+                        tokens.append_all(item.attrs.outer());
+                        item.const_token.to_tokens(tokens);
+                        item.ident.to_tokens(tokens);
+                        item.colon_token.to_tokens(tokens);
+                        item.ty.to_tokens(tokens);
+
+                        Eq::default().to_tokens(tokens);
+                        definitive.to_tokens(tokens);
+                        Colon2::default().to_tokens(tokens);
+                        item.ident.to_tokens(tokens);
+
+                        item.semi_token.to_tokens(tokens);
                     }
                     TraitItem::Method(item) => {
-                        let sig = &item.sig;
-                        let ident = &sig.ident;
-                        let params = sig.inputs.iter().map(|arg| match arg {
+                        tokens.append_all(item.attrs.outer());
+                        item.sig.to_tokens(tokens);
+
+                        let ident = &item.sig.ident;
+                        let params = item.sig.inputs.iter().map(|arg| match arg {
                             FnArg::Receiver(arg) => &arg.self_token as &dyn ToTokens,
                             FnArg::Typed(arg) => &arg.pat,
                         });
-                        impl_items.append_all(quote! {
-                            #sig {
-                                #definitive :: #ident ( #(#params),* )
-                            }
-                        });
+                        tokens.append_all(quote! { {
+                            #definitive :: #ident ( #(#params),* )
+                        } });
                     }
                     TraitItem::Type(item) => {
-                        let ident = &item.ident;
-                        impl_items.append_all(quote! {
-                            type #ident = #definitive :: #ident;
-                        });
+                        tokens.append_all(item.attrs.outer());
+                        item.type_token.to_tokens(tokens);
+                        item.ident.to_tokens(tokens);
+
+                        let (_, ty_generics, _) = item.generics.split_for_impl();
+                        ty_generics.to_tokens(tokens);
+
+                        Eq::default().to_tokens(tokens);
+                        definitive.to_tokens(tokens);
+                        Colon2::default().to_tokens(tokens);
+                        item.ident.to_tokens(tokens);
+                        ty_generics.to_tokens(tokens);
+
+                        item.semi_token.to_tokens(tokens);
                     }
                     TraitItem::Macro(item) => {
                         emit_error!(item, "unsupported: macro item in trait");
