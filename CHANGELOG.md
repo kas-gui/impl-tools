@@ -2,6 +2,10 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2022-09-17
+
+-   Fix `#[autoimpl]` on traits for GATs and attributes on trait const/method/type items (#17)
+
 ## [0.4.0] — 2022-08-19
 
 Change signature of `ScopeAttr::apply`: replace `args: TokenStream, attr_span: Span`
