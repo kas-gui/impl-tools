@@ -27,5 +27,8 @@ path = "lib"
 [dev-dependencies]
 doc-comment = "0.3.3"
 
+[build-dependencies]
+autocfg = "1.1.0"
+
 [workspace]
 members = ["lib"]

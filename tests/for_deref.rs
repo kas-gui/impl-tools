@@ -72,11 +72,13 @@ fn g() {
     impls_g(&mut (Box::new(S) as Box<dyn G<i32>>));
 }
 
+#[cfg(rustc_1_65)]
 #[autoimpl(for<A: trait> Box<A>)]
 trait Gat {
     type T<X>;
 }
 
+#[cfg(rustc_1_65)]
 #[test]
 fn gat() {
     struct S;
