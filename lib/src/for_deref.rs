@@ -82,14 +82,13 @@ mod parsing {
                         if let WherePredicate::Type(pred) = pred {
                             for bound in &pred.bounds {
                                 if matches!(bound, TypeParamBound::TraitSubst(_)) {
-                                    match &pred.bounded_ty {
-                                        Type::Path(TypePath { qself: None, path }) => {
-                                            if let Some(ident) = path.get_ident() {
-                                                definitive = Some(ident.clone());
-                                                break;
-                                            }
+                                    if let Type::Path(TypePath { qself: None, path }) =
+                                        &pred.bounded_ty
+                                    {
+                                        if let Some(ident) = path.get_ident() {
+                                            definitive = Some(ident.clone());
+                                            break;
                                         }
-                                        _ => (),
                                     }
                                 }
                             }
