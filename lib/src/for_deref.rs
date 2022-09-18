@@ -9,10 +9,11 @@ use crate::generics::{
     clause_to_toks, impl_generics, GenericParam, Generics, TypeParamBound, WherePredicate,
 };
 use proc_macro2::{Span, TokenStream};
-use proc_macro_error::emit_error;
+use proc_macro_error::{emit_call_site_error, emit_error};
 use quote::{quote, ToTokens, TokenStreamExt};
 use std::{iter, slice};
 use syn::punctuated::Punctuated;
+use syn::spanned::Spanned;
 use syn::token::{Colon2, Comma, Eq};
 use syn::{Attribute, FnArg, Ident, Item, Token, TraitItem, Type, TypePath};
 
@@ -115,6 +116,25 @@ mod parsing {
     }
 }
 
+fn has_bound_on_self(gen: &syn::Generics) -> bool {
+    if let Some(ref clause) = gen.where_clause {
+        for pred in clause.predicates.iter() {
+            if let syn::WherePredicate::Type(ref ty) = pred {
+                if let Type::Path(ref ty) = ty.bounded_ty {
+                    if ty.qself.is_none() && ty.path.is_ident("Self") {
+                        return true;
+                    }
+                }
+            }
+            // Note: we ignore lifetime bounds, since Self: 'a implies that 'a
+            // is a parameter with lifetime shorter than Self (thus is more a
+            // bound on 'a than it is on Self), while 'a: Self is not supported.
+        }
+    }
+
+    false
+}
+
 impl ForDeref {
     /// Expand over the given `item`
     ///
@@ -168,6 +188,21 @@ impl ForDeref {
                         item.semi_token.to_tokens(tokens);
                     }
                     TraitItem::Method(item) => {
+                        if has_bound_on_self(&item.sig.generics) {
+                            // If the method has a bound on Self, we cannot use a dereferencing
+                            // implementation since the definitive type is not guaranteed to match
+                            // the bound (we also cannot add a bound).
+
+                            if item.default.is_none() {
+                                emit_call_site_error!(
+                                    "unable to write automatic trait implementations";
+                                    note = item.span() => "this method has a bound on Self and no default implementation";
+                                );
+                            }
+
+                            continue;
+                        }
+
                         tokens.append_all(item.attrs.outer());
                         item.sig.to_tokens(tokens);
 
@@ -181,6 +216,13 @@ impl ForDeref {
                         } });
                     }
                     TraitItem::Type(item) => {
+                        if has_bound_on_self(&item.generics) {
+                            emit_call_site_error!(
+                                "unable to write automatic trait implementations";
+                                note = item.span() => "this type has a bound on Self";
+                            );
+                        }
+
                         tokens.append_all(item.attrs.outer());
                         item.type_token.to_tokens(tokens);
                         item.ident.to_tokens(tokens);

@@ -161,6 +161,8 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 /// > _WhereClause_ :\
 /// > &nbsp;&nbsp; `where` ( _WherePredicate_ ),*
 ///
+/// **Targets:** each *Trait* listed is implemented for the annotated type.
+///
 /// ### Generics and where clause
 ///
 /// Type generics are inherited from the type definition. Bounds defined by the
@@ -206,26 +208,41 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 /// ### Parameter syntax
 ///
 /// > _ParamsTrait_ :\
-/// > &nbsp;&nbsp; `for` _Generics_ ( _Type_ ),+ _Definitive_? _WhereClause_?
-/// >
-/// > _Generics_ :\
-/// > &nbsp;&nbsp; `<` ( _GenericParam_ ) `>`
-/// >
-/// > _Definitive_ :\
-/// > &nbsp;&nbsp; `using` _Type_
+/// > &nbsp;&nbsp; `for` _Generics_ ( _Type_ ),+ _WhereClause_?
+///
+/// **Targets:** the annotated trait is implemented for each *Type* listed.
+///
+/// **Definitive type:**
+/// It is required that some generic type parameter has bound `trait`
+/// (e.g. `T: trait`). The first such parameter is designated the *definitive type*.
+///
+/// ### Trait items
+///
+/// Assuming definitive type `T`, trait items are implemented as follows:
+///
+/// -   associated constant `const C`: `const C = T::C;`
+/// -   associated type `type X`: `type X = T::X;`
+/// -   method `fn foo(a: A, b: B)`: `T::foo(a, b)`
+/// -   (unexpanded) macro items: not supported
+///
+/// Generics and where clauses on types and methods are supported.
+///
+/// Items with a where clause with a type bound on `Self` are not supported
+/// since the item is not guaranteed to exist on the definitive type.
+/// Exception: methods with a default implementation (in this case the item is
+/// skipped).
 ///
 /// ### Examples
 ///
 /// Implement `MyTrait` for `&T`, `&mut T` and `Box<dyn MyTrait>`:
 /// ```
 /// # use impl_tools::autoimpl;
-/// #[autoimpl(for<'a, T: trait + ?Sized> &'a T, &'a mut T, Box<T>)]
+/// #[autoimpl(for<T: trait + ?Sized> &T, &mut T, Box<T>)]
 /// trait MyTrait {
 ///     fn f(&self) -> String;
 /// }
 /// ```
-/// Note that the first parameter bound like `T: trait` is used as the
-/// definitive type (required). For example, here, `f` is implemented with the
+/// The definitive type is `T`. For example, here, `f` is implemented with the
 /// body `<T as MyTrait>::f(self)`.
 ///
 /// Note further: if the trait uses generic parameters itself, these must be
