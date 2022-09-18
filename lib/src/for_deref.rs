@@ -120,9 +120,15 @@ fn has_bound_on_self(gen: &syn::Generics) -> bool {
     if let Some(ref clause) = gen.where_clause {
         for pred in clause.predicates.iter() {
             if let syn::WherePredicate::Type(ref ty) = pred {
-                if let Type::Path(ref ty) = ty.bounded_ty {
-                    if ty.qself.is_none() && ty.path.is_ident("Self") {
-                        return true;
+                if let Type::Path(ref bounded) = ty.bounded_ty {
+                    if bounded.qself.is_none() && bounded.path.is_ident("Self") {
+                        if ty
+                            .bounds
+                            .iter()
+                            .any(|bound| matches!(bound, syn::TypeParamBound::Trait(_)))
+                        {
+                            return true;
+                        }
                     }
                 }
             }
