@@ -185,7 +185,7 @@ impl ForDeref {
                         item.type_token.to_tokens(tokens);
                         item.ident.to_tokens(tokens);
 
-                        let (_, ty_generics, _) = item.generics.split_for_impl();
+                        let (_, ty_generics, where_clause) = item.generics.split_for_impl();
                         ty_generics.to_tokens(tokens);
 
                         Eq::default().to_tokens(tokens);
@@ -194,6 +194,7 @@ impl ForDeref {
                         item.ident.to_tokens(tokens);
                         ty_generics.to_tokens(tokens);
 
+                        where_clause.to_tokens(tokens);
                         item.semi_token.to_tokens(tokens);
                     }
                     TraitItem::Macro(item) => {
