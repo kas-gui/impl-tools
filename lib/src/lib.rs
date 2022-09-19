@@ -12,6 +12,7 @@
 #![deny(missing_docs)]
 // Lint advocates use of bool::then_some, stablizied in rustc 1.62.0
 #![allow(clippy::unnecessary_lazy_evaluations)]
+#![allow(clippy::style)]
 
 pub mod autoimpl;
 mod default;
