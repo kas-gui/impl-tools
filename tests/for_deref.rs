@@ -39,7 +39,7 @@ fn z() {
     impls_z(Box::new(()));
 }
 
-#[autoimpl(for<'a, V, T> &'a T, &'a mut T, Box<T> where T: trait + ?Sized)]
+#[autoimpl(for<'a, T> &'a T, &'a mut T, Box<T> where T: trait + ?Sized)]
 trait G<V>
 where
     V: Debug,
@@ -78,6 +78,13 @@ fn g() {
     impls_g(&mut &Box::new(S));
     impls_g(Box::new(S) as Box<dyn G<i32>>);
     impls_g(&mut (Box::new(S) as Box<dyn G<i32>>));
+}
+
+#[autoimpl(for<T: trait + ?Sized> &T)]
+trait H<X, Y: G<X>>
+where
+    X: Debug,
+{
 }
 
 #[cfg(rustc_1_65)]
