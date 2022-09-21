@@ -1,6 +1,6 @@
 [package]
 name = "impl-tools"
-version = "0.4.4"
+version = "0.5.0"
 authors = ["Diggory Hardy <git@dhardy.name>"]
 edition = "2021"
 license = "MIT/Apache-2.0"
@@ -21,7 +21,7 @@ proc-macro-error = "1.0"
 version = "1.0.14"
 
 [dependencies.impl-tools-lib]
-version = "0.4.4"
+version = "0.5.0"
 path = "lib"
 
 [dev-dependencies]
