@@ -7,9 +7,9 @@
 
 use crate::generics::{clause_to_toks, WhereClause};
 use crate::{ForDeref, SimplePath};
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::{Span, TokenStream as Toks};
 use proc_macro_error::emit_error;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{quote, TokenStreamExt};
 use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{parse2, Field, Fields, Ident, Index, Item, ItemStruct, Member, Path, Token};
@@ -153,18 +153,18 @@ impl ImplTraits {
     /// The caller should append the result to `item` tokens.
     pub fn expand(
         mut self,
-        item: TokenStream,
+        item: Toks,
         find_impl: impl Fn(&Path) -> Option<&'static dyn ImplTrait>,
-    ) -> TokenStream {
+    ) -> Toks {
         let item = match parse2::<Item>(item) {
             Ok(Item::Struct(item)) => item,
             Ok(item) => {
                 emit_error!(item, "expected struct");
-                return TokenStream::new();
+                return Toks::new();
             }
             Err(err) => {
                 emit_error!(err);
-                return TokenStream::new();
+                return Toks::new();
             }
         };
 
@@ -177,7 +177,7 @@ impl ImplTraits {
                 Some(impl_) => impl_,
                 None => {
                     emit_error!(target, "unsupported trait");
-                    return TokenStream::new();
+                    return Toks::new();
                 }
             };
 
@@ -223,7 +223,7 @@ impl ImplTraits {
             emit_error!(mem, "not a struct field");
         }
 
-        let mut toks = TokenStream::new();
+        let mut toks = Toks::new();
         for mem in &self.args.ignores {
             check_is_field(mem, &item.fields);
         }
@@ -312,8 +312,7 @@ impl ImplArgs {
 pub trait ImplTrait {
     /// Trait path
     ///
-    /// The full path is printed in implementations. Only the last component is
-    /// normally used when matching.
+    /// This path is matched against trait names in `#[autoimpl]` parameters.
     fn path(&self) -> SimplePath;
 
     /// True if this target supports ignoring fields
@@ -328,14 +327,13 @@ pub trait ImplTrait {
     /// and suffices for most cases. It may be overridden, e.g. to generate
     /// multiple implementation items. It is not recommended to modify the
     /// generics.
-    fn struct_impl(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
+    fn struct_impl(&self, item: &ItemStruct, args: &ImplArgs) -> Result<Toks> {
         let type_ident = &item.ident;
         let (impl_generics, ty_generics, item_wc) = item.generics.split_for_impl();
 
-        let path = self.path().to_token_stream();
-        let wc = clause_to_toks(&args.clause, item_wc, &path);
+        let (path, items) = self.struct_items(item, args)?;
 
-        let items = self.struct_items(item, args)?;
+        let wc = clause_to_toks(&args.clause, item_wc, &path);
 
         Ok(quote! {
             impl #impl_generics #path for #type_ident #ty_generics #wc {
@@ -346,7 +344,14 @@ pub trait ImplTrait {
 
     /// Generate struct items
     ///
-    /// The resulting items are injected into an impl of the form
-    /// `impl<..> TraitName for StructName<..> where .. { #items }`.
-    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream>;
+    /// On success, this method returns the tuple `(trait_path, items)`. These
+    /// are used to generate the following implementation:
+    /// ```
+    /// impl #impl_generics #trait_path for #type_ident #ty_generics #where_clause {
+    ///     #items
+    /// }
+    /// ```
+    ///
+    /// Note: this method is *only* called by the default implementation of [`Self::struct_impl`].
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)>;
 }

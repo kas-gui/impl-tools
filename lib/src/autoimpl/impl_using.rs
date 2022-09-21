@@ -7,7 +7,7 @@
 
 use super::{Error, ImplArgs, ImplTrait, Result};
 use crate::SimplePath;
-use proc_macro2::TokenStream;
+use proc_macro2::TokenStream as Toks;
 use quote::quote;
 use syn::ItemStruct;
 
@@ -26,16 +26,17 @@ impl ImplTrait for ImplDeref {
         true
     }
 
-    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
         if let Some(field) = args.using_field(&item.fields) {
             let ty = field.ty.clone();
             let member = args.using_member().unwrap();
-            Ok(quote! {
+            let method = quote! {
                 type Target = #ty;
                 fn deref(&self) -> &Self::Target {
                     &self.#member
                 }
-            })
+            };
+            Ok((quote! { ::core::ops::Deref }, method))
         } else {
             Err(Error::RequireUsing)
         }
@@ -57,13 +58,14 @@ impl ImplTrait for ImplDerefMut {
         true
     }
 
-    fn struct_items(&self, _: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
+    fn struct_items(&self, _: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
         if let Some(member) = args.using_member() {
-            Ok(quote! {
+            let method = quote! {
                 fn deref_mut(&mut self) -> &mut Self::Target {
                     &mut self.#member
                 }
-            })
+            };
+            Ok((quote! { ::core::ops::DerefMut }, method))
         } else {
             Err(Error::RequireUsing)
         }

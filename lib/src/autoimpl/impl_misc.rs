@@ -7,7 +7,7 @@
 
 use super::{ImplArgs, ImplTrait, Result};
 use crate::SimplePath;
-use proc_macro2::TokenStream;
+use proc_macro2::TokenStream as Toks;
 use quote::{quote, TokenStreamExt};
 use syn::{Fields, Index, ItemStruct};
 
@@ -26,11 +26,11 @@ impl ImplTrait for ImplClone {
         false
     }
 
-    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
         let type_ident = &item.ident;
         let inner = match &item.fields {
             Fields::Named(fields) => {
-                let mut toks = TokenStream::new();
+                let mut toks = Toks::new();
                 for field in fields.named.iter() {
                     let ident = field.ident.as_ref().unwrap();
                     if args.ignore_named(ident) {
@@ -42,7 +42,7 @@ impl ImplTrait for ImplClone {
                 quote! { #type_ident { #toks } }
             }
             Fields::Unnamed(fields) => {
-                let mut toks = TokenStream::new();
+                let mut toks = Toks::new();
                 for i in 0..fields.unnamed.len() {
                     let index = Index::from(i);
                     if args.ignore_unnamed(&index) {
@@ -55,11 +55,12 @@ impl ImplTrait for ImplClone {
             }
             Fields::Unit => quote! { #type_ident },
         };
-        Ok(quote! {
+        let method = quote! {
             fn clone(&self) -> Self {
                 #inner
             }
-        })
+        };
+        Ok((quote! { ::core::clone::Clone }, method))
     }
 }
 
@@ -78,7 +79,7 @@ impl ImplTrait for ImplDebug {
         false
     }
 
-    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
         let type_name = item.ident.to_string();
         let mut inner;
         match &item.fields {
@@ -120,11 +121,12 @@ impl ImplTrait for ImplDebug {
             }
             Fields::Unit => inner = quote! { f.write_str(#type_name) },
         };
-        Ok(quote! {
+        let method = quote! {
             fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
                 #inner
             }
-        })
+        };
+        Ok((quote! { ::core::fmt::Debug }, method))
     }
 }
 
@@ -143,7 +145,7 @@ impl ImplTrait for ImplDefault {
         false
     }
 
-    fn struct_items(&self, item: &ItemStruct, _: &ImplArgs) -> Result<TokenStream> {
+    fn struct_items(&self, item: &ItemStruct, _: &ImplArgs) -> Result<(Toks, Toks)> {
         let type_ident = &item.ident;
         let mut inner;
         match &item.fields {
@@ -164,10 +166,11 @@ impl ImplTrait for ImplDefault {
             }
             Fields::Unit => inner = quote! { #type_ident },
         }
-        Ok(quote! {
+        let method = quote! {
             fn default() -> Self {
                 #inner
             }
-        })
+        };
+        Ok((quote! { ::core::default::Default }, method))
     }
 }

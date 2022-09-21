@@ -109,23 +109,3 @@ impl SimplePath {
         }
     }
 }
-
-mod printing {
-    use super::SimplePath;
-    use proc_macro2::{Ident, Span, TokenStream};
-    use quote::{quote, ToTokens, TokenStreamExt};
-
-    impl ToTokens for SimplePath {
-        fn to_tokens(&self, tokens: &mut TokenStream) {
-            let mut iter = self.0.iter();
-            let first = iter.next().unwrap();
-            if !first.is_empty() {
-                tokens.append(Ident::new(first, Span::call_site()));
-            }
-            for next in iter {
-                let ident = Ident::new(next, Span::call_site());
-                tokens.append_all(quote! { :: #ident });
-            }
-        }
-    }
-}
