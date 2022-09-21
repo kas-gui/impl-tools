@@ -14,6 +14,21 @@ use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{parse2, Field, Fields, Ident, Index, Item, ItemStruct, Member, Path, Token};
 
+mod impl_misc;
+mod impl_using;
+
+pub use impl_misc::*;
+pub use impl_using::*;
+
+/// List of all builtin trait implementations
+pub const STD_IMPLS: &[&dyn ImplTrait] = &[
+    &ImplClone,
+    &ImplDebug,
+    &ImplDefault,
+    &ImplDeref,
+    &ImplDerefMut,
+];
+
 #[allow(non_camel_case_types)]
 mod kw {
     use syn::custom_keyword;
@@ -334,233 +349,4 @@ pub trait ImplTrait {
     /// The resulting items are injected into an impl of the form
     /// `impl<..> TraitName for StructName<..> where .. { #items }`.
     fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream>;
-}
-
-/// List of all builtin trait implementations
-pub const STD_IMPLS: &[&dyn ImplTrait] = &[
-    &ImplClone,
-    &ImplDebug,
-    &ImplDefault,
-    &ImplDeref,
-    &ImplDerefMut,
-];
-
-/// Implement [`core::clone::Clone`]
-pub struct ImplClone;
-impl ImplTrait for ImplClone {
-    fn path(&self) -> SimplePath {
-        SimplePath::new(&["", "core", "clone", "Clone"])
-    }
-
-    fn support_ignore(&self) -> bool {
-        true
-    }
-
-    fn support_using(&self) -> bool {
-        false
-    }
-
-    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
-        let type_ident = &item.ident;
-        let inner = match &item.fields {
-            Fields::Named(fields) => {
-                let mut toks = TokenStream::new();
-                for field in fields.named.iter() {
-                    let ident = field.ident.as_ref().unwrap();
-                    if args.ignore_named(ident) {
-                        toks.append_all(quote! { #ident: Default::default(), });
-                    } else {
-                        toks.append_all(quote! { #ident: self.#ident.clone(), });
-                    }
-                }
-                quote! { #type_ident { #toks } }
-            }
-            Fields::Unnamed(fields) => {
-                let mut toks = TokenStream::new();
-                for i in 0..fields.unnamed.len() {
-                    let index = Index::from(i);
-                    if args.ignore_unnamed(&index) {
-                        toks.append_all(quote! { Default::default(), });
-                    } else {
-                        toks.append_all(quote! { self.#index.clone(), });
-                    }
-                }
-                quote! { #type_ident ( #toks ) }
-            }
-            Fields::Unit => quote! { #type_ident },
-        };
-        Ok(quote! {
-            fn clone(&self) -> Self {
-                #inner
-            }
-        })
-    }
-}
-
-/// Implement [`core::fmt::Debug`]
-pub struct ImplDebug;
-impl ImplTrait for ImplDebug {
-    fn path(&self) -> SimplePath {
-        SimplePath::new(&["", "core", "fmt", "Debug"])
-    }
-
-    fn support_ignore(&self) -> bool {
-        true
-    }
-
-    fn support_using(&self) -> bool {
-        false
-    }
-
-    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
-        let type_name = item.ident.to_string();
-        let mut inner;
-        match &item.fields {
-            Fields::Named(fields) => {
-                inner = quote! { f.debug_struct(#type_name) };
-                let mut no_skips = true;
-                for field in fields.named.iter() {
-                    let ident = field.ident.as_ref().unwrap();
-                    if !args.ignore_named(ident) {
-                        let name = ident.to_string();
-                        inner.append_all(quote! {
-                            .field(#name, &self.#ident)
-                        });
-                    } else {
-                        no_skips = false;
-                    }
-                }
-                if no_skips {
-                    inner.append_all(quote! { .finish() });
-                } else {
-                    inner.append_all(quote! { .finish_non_exhaustive() });
-                };
-            }
-            Fields::Unnamed(fields) => {
-                inner = quote! { f.debug_tuple(#type_name) };
-                for i in 0..fields.unnamed.len() {
-                    let index = Index::from(i);
-                    if !args.ignore_unnamed(&index) {
-                        inner.append_all(quote! {
-                            .field(&self.#index)
-                        });
-                    } else {
-                        inner.append_all(quote! {
-                            .field(&format_args!("_"))
-                        });
-                    }
-                }
-                inner.append_all(quote! { .finish() });
-            }
-            Fields::Unit => inner = quote! { f.write_str(#type_name) },
-        };
-        Ok(quote! {
-            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-                #inner
-            }
-        })
-    }
-}
-
-/// Implement [`core::default::Default`]
-pub struct ImplDefault;
-impl ImplTrait for ImplDefault {
-    fn path(&self) -> SimplePath {
-        SimplePath::new(&["", "core", "default", "Default"])
-    }
-
-    fn support_ignore(&self) -> bool {
-        false
-    }
-
-    fn support_using(&self) -> bool {
-        false
-    }
-
-    fn struct_items(&self, item: &ItemStruct, _: &ImplArgs) -> Result<TokenStream> {
-        let type_ident = &item.ident;
-        let mut inner;
-        match &item.fields {
-            Fields::Named(fields) => {
-                inner = quote! {};
-                for field in fields.named.iter() {
-                    let ident = field.ident.as_ref().unwrap();
-                    inner.append_all(quote! { #ident: Default::default(), });
-                }
-                inner = quote! { #type_ident { #inner } };
-            }
-            Fields::Unnamed(fields) => {
-                inner = quote! {};
-                for _ in 0..fields.unnamed.len() {
-                    inner.append_all(quote! { Default::default(), });
-                }
-                inner = quote! { #type_ident(#inner) };
-            }
-            Fields::Unit => inner = quote! { #type_ident },
-        }
-        Ok(quote! {
-            fn default() -> Self {
-                #inner
-            }
-        })
-    }
-}
-
-/// Implement [`core::ops::Deref`]
-pub struct ImplDeref;
-impl ImplTrait for ImplDeref {
-    fn path(&self) -> SimplePath {
-        SimplePath::new(&["", "core", "ops", "Deref"])
-    }
-
-    fn support_ignore(&self) -> bool {
-        false
-    }
-
-    fn support_using(&self) -> bool {
-        true
-    }
-
-    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
-        if let Some(field) = args.using_field(&item.fields) {
-            let ty = field.ty.clone();
-            let member = args.using_member().unwrap();
-            Ok(quote! {
-                type Target = #ty;
-                fn deref(&self) -> &Self::Target {
-                    &self.#member
-                }
-            })
-        } else {
-            Err(Error::RequireUsing)
-        }
-    }
-}
-
-/// Implement [`core::ops::DerefMut`]
-pub struct ImplDerefMut;
-impl ImplTrait for ImplDerefMut {
-    fn path(&self) -> SimplePath {
-        SimplePath::new(&["", "core", "ops", "DerefMut"])
-    }
-
-    fn support_ignore(&self) -> bool {
-        false
-    }
-
-    fn support_using(&self) -> bool {
-        true
-    }
-
-    fn struct_items(&self, _: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
-        if let Some(member) = args.using_member() {
-            Ok(quote! {
-                fn deref_mut(&mut self) -> &mut Self::Target {
-                    &mut self.#member
-                }
-            })
-        } else {
-            Err(Error::RequireUsing)
-        }
-    }
 }
