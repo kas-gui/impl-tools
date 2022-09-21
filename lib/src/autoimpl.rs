@@ -25,6 +25,10 @@ pub const STD_IMPLS: &[&dyn ImplTrait] = &[
     &ImplClone,
     &ImplDebug,
     &ImplDefault,
+    &ImplBorrow,
+    &ImplBorrowMut,
+    &ImplAsRef,
+    &ImplAsMut,
     &ImplDeref,
     &ImplDerefMut,
 ];

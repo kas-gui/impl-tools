@@ -11,6 +11,130 @@ use proc_macro2::TokenStream as Toks;
 use quote::quote;
 use syn::ItemStruct;
 
+/// Implement [`core::borrow::Borrow`]
+pub struct ImplBorrow;
+impl ImplTrait for ImplBorrow {
+    fn path(&self) -> SimplePath {
+        SimplePath::new(&["", "core", "borrow", "Borrow"])
+    }
+
+    fn support_ignore(&self) -> bool {
+        false
+    }
+
+    fn support_using(&self) -> bool {
+        true
+    }
+
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
+        if let Some(field) = args.using_field(&item.fields) {
+            let ty = field.ty.clone();
+            let member = args.using_member().unwrap();
+            let method = quote! {
+                fn borrow(&self) -> & #ty {
+                    &self.#member
+                }
+            };
+            Ok((quote! { ::core::borrow::Borrow<#ty> }, method))
+        } else {
+            Err(Error::RequireUsing)
+        }
+    }
+}
+
+/// Implement [`core::borrow::BorrowMut`]
+pub struct ImplBorrowMut;
+impl ImplTrait for ImplBorrowMut {
+    fn path(&self) -> SimplePath {
+        SimplePath::new(&["", "core", "borrow", "BorrowMut"])
+    }
+
+    fn support_ignore(&self) -> bool {
+        false
+    }
+
+    fn support_using(&self) -> bool {
+        true
+    }
+
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
+        if let Some(field) = args.using_field(&item.fields) {
+            let ty = field.ty.clone();
+            let member = args.using_member().unwrap();
+            let method = quote! {
+                fn borrow_mut(&mut self) -> &mut #ty {
+                    &mut self.#member
+                }
+            };
+            Ok((quote! { ::core::borrow::BorrowMut<#ty> }, method))
+        } else {
+            Err(Error::RequireUsing)
+        }
+    }
+}
+
+/// Implement [`core::convert::AsRef`]
+pub struct ImplAsRef;
+impl ImplTrait for ImplAsRef {
+    fn path(&self) -> SimplePath {
+        SimplePath::new(&["", "core", "convert", "AsRef"])
+    }
+
+    fn support_ignore(&self) -> bool {
+        false
+    }
+
+    fn support_using(&self) -> bool {
+        true
+    }
+
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
+        if let Some(field) = args.using_field(&item.fields) {
+            let ty = field.ty.clone();
+            let member = args.using_member().unwrap();
+            let method = quote! {
+                fn as_ref(&self) -> & #ty {
+                    &self.#member
+                }
+            };
+            Ok((quote! { ::core::convert::AsRef<#ty> }, method))
+        } else {
+            Err(Error::RequireUsing)
+        }
+    }
+}
+
+/// Implement [`core::convert::AsMut`]
+pub struct ImplAsMut;
+impl ImplTrait for ImplAsMut {
+    fn path(&self) -> SimplePath {
+        SimplePath::new(&["", "core", "convert", "AsMut"])
+    }
+
+    fn support_ignore(&self) -> bool {
+        false
+    }
+
+    fn support_using(&self) -> bool {
+        true
+    }
+
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
+        if let Some(field) = args.using_field(&item.fields) {
+            let ty = field.ty.clone();
+            let member = args.using_member().unwrap();
+            let method = quote! {
+                fn as_mut(&mut self) -> &mut #ty {
+                    &mut self.#member
+                }
+            };
+            Ok((quote! { ::core::convert::AsMut<#ty> }, method))
+        } else {
+            Err(Error::RequireUsing)
+        }
+    }
+}
+
 /// Implement [`core::ops::Deref`]
 pub struct ImplDeref;
 impl ImplTrait for ImplDeref {

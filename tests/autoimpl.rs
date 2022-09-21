@@ -52,6 +52,8 @@ fn x() {
 }
 
 #[autoimpl(Deref, DerefMut using self.t)]
+#[autoimpl(Borrow, BorrowMut using self.t)]
+#[autoimpl(AsRef, AsMut using self.t)]
 struct Y<S, T> {
     _s: S,
     t: T,
@@ -59,12 +61,18 @@ struct Y<S, T> {
 
 #[test]
 fn y() {
+    use core::borrow::{Borrow, BorrowMut};
+    use core::ops::Deref;
+
     let mut y = Y { _s: (), t: 1i32 };
 
-    fn set(x: &mut i32) {
-        *x = 2;
-    }
-    set(y.deref_mut());
-
+    *y.deref_mut() = 2;
+    assert_eq!(y.deref(), &2);
     assert_eq!(y.t, 2);
+
+    *y.borrow_mut() = 15;
+    assert_eq!(Borrow::<i32>::borrow(&y), &15);
+
+    *y.as_mut() = 12;
+    assert_eq!(y.as_ref(), &12);
 }
