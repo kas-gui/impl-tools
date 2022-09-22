@@ -105,12 +105,12 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
     toks
 }
 
-/// A variant of the standard `derive` macro
+/// An alternative to the standard `derive` macro
 ///
 /// `#[autoimpl]` may be used in two ways:
 ///
-/// -   On a type definition, to implement a specified trait (like `#[derive]`)
-/// -   On a trait definition, to re-implement that trait for a specified type
+/// -   [On a type definition](#on-type-definitions), to implement a specified trait (like `#[derive]`)
+/// -   [On a trait definition](#on-trait-definitions), to implement the trait for specified types
 ///     supporting [`Deref`]
 ///
 /// If using `autoimpl` **and** `derive` macros with Rust < 1.57.0, the
@@ -118,34 +118,43 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// [`proc_macro_derive`]: https://doc.rust-lang.org/reference/procedural-macros.html#derive-macros
 ///
-/// # Trait implementation
+/// # On type definitions
 ///
-/// | Name | Path | *ignore* | *using* |
-/// |----- |----- |--- |--- |
-/// | `Clone` | `::std::clone::Clone` | initialized with `Default::default()` | - |
-/// | `Debug` | `::std::fmt::Debug` | field is not printed | - |
-/// | `Default` | `::std::default::Default` | - | - |
-/// | `Deref` | `::std::ops::Deref` | - | deref target |
-/// | `DerefMut` | `::std::ops::DerefMut` | - | deref target |
+/// | Path | *ignore* | *using* | *notes* |
+/// |----- |--- |--- |--- |
+/// | [`::core::borrow::Borrow<T>`] | - | borrow target | `T` is type of target field |
+/// | [`::core::borrow::BorrowMut<T>`] | - | borrow target | `T` is type of target field |
+/// | [`::core::clone::Clone`] | yes | - | ignored fields use `Default::default()` |
+/// | [`::core::cmp::Eq`] | * | - | *allowed with `PartialEq` |
+/// | [`::core::cmp::Ord`] | yes | - | |
+/// | [`::core::cmp::PartialEq`] | yes | - | |
+/// | [`::core::cmp::PartialOrd`] | yes | - | |
+/// | [`::core::convert::AsRef<T>`] | - | ref target | `T` is type of target field |
+/// | [`::core::convert::AsMut<T>`] | - | ref target | `T` is type of target field |
+/// | [`::core::default::Default`] | - | - | [`macro@impl_default`] is a more flexible alternative |
+/// | [`::core::fmt::Debug`] | yes | - | |
+/// | [`::core::hash::Hash`] | yes | - | |
+/// | [`::core::marker::Copy`] | * | - | *allowed with `Clone` |
+/// | [`::core::ops::Deref`] | - | deref target | `type Target` is type of target field |
+/// | [`::core::ops::DerefMut`] | - | deref target | `type Target` is type of target field |
 ///
-/// Note: [`macro@impl_default`] is a more flexible alternative to `Default`.
-///
-/// *Ignore:* trait supports ignoring fields (e.g. `#[autoimpl(Debug ignore self.foo)]`).
-///
-/// *Using:* trait requires a named field to "use". Example:
-/// `#[autoimpl(Deref using self.foo)]` implements [`Deref`] to return (a
-/// reference to) field `self.foo`.
-///
-/// Traits are matched according to the path, via one of three forms:
+/// Traits are matched from the path, as follows:
 ///
 /// -   Only the last component, e.g. `#[autoimpl(Clone)]`
-/// -   The full path except leading `::`, e.g. `#[autoimpl(std::clone::Clone)]`
-/// -   The full path with leading `::`, e.g. `#[autoimpl(::std::clone::Clone)]`
+/// -   The full path with leading `::`, e.g. `#[autoimpl(::core::clone::Clone)]`
+/// -   The full path without leading `::`, e.g. `#[autoimpl(core::clone::Clone)]`
+/// -   The full path with/without leading `::`, using `std` instead of `core` or `alloc`,
+///     e.g. `#[autoimpl(std::clone::Clone)]`
 ///
-/// Note regarding `no_std` usage: the above table is wrong in that traits use
-/// paths in `core` or `alloc`, but also match `std`. That is,
-/// `#[autoimpl(std::clone::Clone)]` and `#[autoimpl(core::clone::Clone)]` are
-/// equivalent and generate an impl for `::core::clone::Clone`.
+/// *Ignore:* some trait implementations supports ignoring listed fields.
+/// For example, `#[autoimpl(PartialEq ignore self.foo)]` will implement
+/// `PartialEq`, comparing all fields except `foo`.
+/// Note: `Copy` and `Eq` do not *use* `ignore`, but tolerate its usage by a
+/// companion trait (e.g. `#[autoimpl(PartialEq, Eq ignore self.a)]`).
+///
+/// *Using:* some trait implementations require a named field to "use".
+/// For example, `#[autoimpl(Deref using self.foo)]` implements [`Deref`] to
+/// return a reference to field `self.foo`.
 ///
 /// ### Parameter syntax
 ///
@@ -200,7 +209,7 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 /// struct AnnotatedWrapper<T>(String, T);
 /// ```
 ///
-/// # Trait re-implementation
+/// # On trait definitions
 ///
 /// User-defined traits may be implemented over any type supporting `Deref`
 /// (and if required `DerefMut`) to another type supporting the trait.
