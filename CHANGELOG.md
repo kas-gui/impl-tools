@@ -2,9 +2,14 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] — 2022-09-??
+## [0.5.0] — 2022-09-22
 
 -   `#[autoimpl]` on traits now merges trait generics with macro generics (#21)
+-   `lib::autoimpl::struct_items` returns the trait path in addition to impl items (#22)
+-   Add `lib::autoimpl::ImplArgs::for_fields`, `for_fields_iter` (#22)
+-   Add autoimpl support for `Copy`, `AsRef`, `AsMut`, `Borrow`, `BorrowMut`,
+    `PartialEq`, `Eq`, `PartialOrd`, `Ord`, `Hash` (#22)
+-   Add `#[automatically_derived]` annotation to generated impls (#22)
 
 ## [0.4.4] — 2022-09-19
 

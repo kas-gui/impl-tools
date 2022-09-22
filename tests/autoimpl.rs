@@ -12,6 +12,8 @@ use impl_tools::autoimpl;
 
 fn test_has_clone(_: impl Clone) {}
 fn test_has_copy(_: impl Copy) {}
+fn test_has_partial_eq(_foo: impl PartialEq) {}
+fn test_has_eq(_foo: impl Eq) {}
 
 #[autoimpl(std::clone::Clone, core::fmt::Debug)]
 struct Unit;
@@ -152,4 +154,29 @@ fn xx_hash_64_0(x: impl core::hash::Hash) -> u64 {
     let mut hasher = twox_hash::XxHash64::with_seed(0);
     x.hash(&mut hasher);
     core::hash::Hasher::finish(&hasher)
+}
+
+#[allow(unused)]
+#[autoimpl(PartialEq, Eq ignore self.bar where S: trait)]
+struct Foo<S, T: ?Sized> {
+    foo: S,
+    bar: u8,
+    ptr: *const T,
+}
+#[test]
+fn foo() {
+    let x = || 1;
+    let ptr = &x as *const _;
+    test_has_partial_eq(Foo {
+        foo: 1f32,
+        bar: 0,
+        ptr,
+    });
+    // Expected to fail:
+    // test_has_eq(Foo { foo: 1f32, bar: 0, ptr });
+    test_has_eq(Foo {
+        foo: 1i32,
+        bar: 0,
+        ptr,
+    });
 }
