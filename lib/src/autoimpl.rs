@@ -7,12 +7,101 @@
 
 use crate::generics::{clause_to_toks, WhereClause};
 use crate::{ForDeref, SimplePath};
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::{Span, TokenStream as Toks};
 use proc_macro_error::emit_error;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{quote, TokenStreamExt};
 use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{parse2, Field, Fields, Ident, Index, Item, ItemStruct, Member, Path, Token};
+
+mod impl_misc;
+mod impl_using;
+
+pub use impl_misc::*;
+pub use impl_using::*;
+
+/// List of all builtin trait implementations
+pub const STD_IMPLS: &[&dyn ImplTrait] = &[
+    &ImplClone,
+    &ImplCopy,
+    &ImplDebug,
+    &ImplDefault,
+    &ImplPartialEq,
+    &ImplEq,
+    &ImplPartialOrd,
+    &ImplOrd,
+    &ImplHash,
+    &ImplBorrow,
+    &ImplBorrowMut,
+    &ImplAsRef,
+    &ImplAsMut,
+    &ImplDeref,
+    &ImplDerefMut,
+];
+
+/// Trait required by extensions
+pub trait ImplTrait {
+    /// Trait path
+    ///
+    /// This path is matched against trait names in `#[autoimpl]` parameters.
+    fn path(&self) -> SimplePath;
+
+    /// True if this target supports ignoring fields
+    ///
+    /// Default implementation: `false`
+    fn support_ignore(&self) -> bool {
+        false
+    }
+
+    /// If the target does not support `ignore` but does tolerate `ignore` in
+    /// the presence of another target (e.g. `autoimpl(Eq, PartialEq ignore self.foo)`),
+    /// return the path of that other target here.
+    fn allow_ignore_with(&self) -> Option<SimplePath> {
+        None
+    }
+
+    /// True if this target supports using a field
+    ///
+    /// Default implementation: `false`
+    fn support_using(&self) -> bool {
+        false
+    }
+
+    /// Generate an impl for a struct item
+    ///
+    /// The default implementation is a wrapper around [`Self::struct_items`]
+    /// and suffices for most cases. It may be overridden, e.g. to generate
+    /// multiple implementation items. It is not recommended to modify the
+    /// generics.
+    fn struct_impl(&self, item: &ItemStruct, args: &ImplArgs) -> Result<Toks> {
+        let type_ident = &item.ident;
+        let (impl_generics, ty_generics, item_wc) = item.generics.split_for_impl();
+
+        let (path, items) = self.struct_items(item, args)?;
+
+        let wc = clause_to_toks(&args.clause, item_wc, &path);
+
+        Ok(quote! {
+            #[automatically_derived]
+            impl #impl_generics #path for #type_ident #ty_generics #wc {
+                #items
+            }
+        })
+    }
+
+    /// Generate struct items
+    ///
+    /// On success, this method returns the tuple `(trait_path, items)`. These
+    /// are used to generate the following implementation:
+    /// ```ignore
+    /// impl #impl_generics #trait_path for #type_ident #ty_generics #where_clause {
+    ///     #items
+    /// }
+    /// ```
+    ///
+    /// Note: this method is *only* called by the default implementation of [`Self::struct_impl`].
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)>;
+}
 
 #[allow(non_camel_case_types)]
 mod kw {
@@ -138,23 +227,23 @@ impl ImplTraits {
     /// The caller should append the result to `item` tokens.
     pub fn expand(
         mut self,
-        item: TokenStream,
+        item: Toks,
         find_impl: impl Fn(&Path) -> Option<&'static dyn ImplTrait>,
-    ) -> TokenStream {
+    ) -> Toks {
         let item = match parse2::<Item>(item) {
             Ok(Item::Struct(item)) => item,
             Ok(item) => {
                 emit_error!(item, "expected struct");
-                return TokenStream::new();
+                return Toks::new();
             }
             Err(err) => {
                 emit_error!(err);
-                return TokenStream::new();
+                return Toks::new();
             }
         };
 
-        let mut not_supporting_ignore = None;
-        let mut not_supporting_using = None;
+        let mut not_supporting_ignore = vec![];
+        let mut not_supporting_using = vec![];
 
         let mut impl_targets: Vec<(Span, _)> = Vec::with_capacity(self.targets.len());
         for target in self.targets.drain(..) {
@@ -162,28 +251,37 @@ impl ImplTraits {
                 Some(impl_) => impl_,
                 None => {
                     emit_error!(target, "unsupported trait");
-                    return TokenStream::new();
+                    return Toks::new();
                 }
             };
 
-            if not_supporting_ignore.is_none() && !target_impl.support_ignore() {
-                not_supporting_ignore = Some(target.clone());
+            if !target_impl.support_ignore() {
+                let except_with = target_impl.allow_ignore_with();
+                not_supporting_ignore.push((target.clone(), except_with));
             }
-            if not_supporting_using.is_none() && !target_impl.support_using() {
-                not_supporting_using = Some(target.clone());
+            if !target_impl.support_using() {
+                not_supporting_using.push(target.clone());
             }
 
             impl_targets.push((target.span(), target_impl));
         }
 
         if !self.args.ignores.is_empty() {
-            if let Some(ref target) = not_supporting_ignore {
-                emit_error!(target, "target does not support `ignore`-d fields",);
+            for (target, except_with) in not_supporting_ignore.into_iter() {
+                if let Some(path) = except_with {
+                    if impl_targets
+                        .iter()
+                        .any(|(_span, target_impl)| path == target_impl.path())
+                    {
+                        continue;
+                    }
+                }
+                emit_error!(target, "target does not support `ignore`",);
             }
         }
         if self.args.using.is_some() {
-            if let Some(target) = not_supporting_using.as_ref() {
-                emit_error!(target, "`target does not support `using` a field",);
+            for target in not_supporting_using.into_iter() {
+                emit_error!(target, "`target does not support `using`",);
             }
         }
 
@@ -208,7 +306,7 @@ impl ImplTraits {
             emit_error!(mem, "not a struct field");
         }
 
-        let mut toks = TokenStream::new();
+        let mut toks = Toks::new();
         for mem in &self.args.ignores {
             check_is_field(mem, &item.fields);
         }
@@ -269,7 +367,7 @@ impl ImplArgs {
         self.using.as_ref()
     }
 
-    /// Find find to "use", if any
+    /// Find field to "use", if any
     pub fn using_field<'b>(&self, fields: &'b Fields) -> Option<&'b Field> {
         match fields {
             Fields::Named(fields) => fields.named.iter().find(|field| match self.using {
@@ -291,276 +389,26 @@ impl ImplArgs {
             Fields::Unit => None,
         }
     }
-}
 
-/// Trait required by extensions
-pub trait ImplTrait {
-    /// Trait path
-    ///
-    /// The full path is printed in implementations. Only the last component is
-    /// normally used when matching.
-    fn path(&self) -> SimplePath;
+    /// Call the given closure over all non-ignored fields
+    pub fn for_fields<'f>(&self, fields: &'f Fields, f: impl FnMut(Member, &'f Field)) {
+        self.for_fields_iter(fields.iter().enumerate(), f);
+    }
 
-    /// True if this target supports ignoring fields
-    fn support_ignore(&self) -> bool;
-
-    /// True if this target supports using a field
-    fn support_using(&self) -> bool;
-
-    /// Generate an impl for a struct item
-    ///
-    /// The default implementation is a wrapper around [`Self::struct_items`]
-    /// and suffices for most cases. It may be overridden, e.g. to generate
-    /// multiple implementation items. It is not recommended to modify the
-    /// generics.
-    fn struct_impl(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
-        let type_ident = &item.ident;
-        let (impl_generics, ty_generics, item_wc) = item.generics.split_for_impl();
-
-        let path = self.path().to_token_stream();
-        let wc = clause_to_toks(&args.clause, item_wc, &path);
-
-        let items = self.struct_items(item, args)?;
-
-        Ok(quote! {
-            impl #impl_generics #path for #type_ident #ty_generics #wc {
-                #items
+    /// Call the given closure over all non-ignored fields
+    pub fn for_fields_iter<'f>(
+        &self,
+        fields: impl Iterator<Item = (usize, &'f Field)>,
+        mut f: impl FnMut(Member, &'f Field),
+    ) {
+        for (i, field) in fields {
+            let member = match field.ident.clone() {
+                Some(ident) => Member::Named(ident),
+                None => Member::Unnamed(Index::from(i)),
+            };
+            if !self.ignore(&member) {
+                f(member, field);
             }
-        })
-    }
-
-    /// Generate struct items
-    ///
-    /// The resulting items are injected into an impl of the form
-    /// `impl<..> TraitName for StructName<..> where .. { #items }`.
-    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream>;
-}
-
-/// List of all builtin trait implementations
-pub const STD_IMPLS: &[&dyn ImplTrait] = &[
-    &ImplClone,
-    &ImplDebug,
-    &ImplDefault,
-    &ImplDeref,
-    &ImplDerefMut,
-];
-
-/// Implement [`core::clone::Clone`]
-pub struct ImplClone;
-impl ImplTrait for ImplClone {
-    fn path(&self) -> SimplePath {
-        SimplePath::new(&["", "core", "clone", "Clone"])
-    }
-
-    fn support_ignore(&self) -> bool {
-        true
-    }
-
-    fn support_using(&self) -> bool {
-        false
-    }
-
-    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
-        let type_ident = &item.ident;
-        let inner = match &item.fields {
-            Fields::Named(fields) => {
-                let mut toks = TokenStream::new();
-                for field in fields.named.iter() {
-                    let ident = field.ident.as_ref().unwrap();
-                    if args.ignore_named(ident) {
-                        toks.append_all(quote! { #ident: Default::default(), });
-                    } else {
-                        toks.append_all(quote! { #ident: self.#ident.clone(), });
-                    }
-                }
-                quote! { #type_ident { #toks } }
-            }
-            Fields::Unnamed(fields) => {
-                let mut toks = TokenStream::new();
-                for i in 0..fields.unnamed.len() {
-                    let index = Index::from(i);
-                    if args.ignore_unnamed(&index) {
-                        toks.append_all(quote! { Default::default(), });
-                    } else {
-                        toks.append_all(quote! { self.#index.clone(), });
-                    }
-                }
-                quote! { #type_ident ( #toks ) }
-            }
-            Fields::Unit => quote! { #type_ident },
-        };
-        Ok(quote! {
-            fn clone(&self) -> Self {
-                #inner
-            }
-        })
-    }
-}
-
-/// Implement [`core::fmt::Debug`]
-pub struct ImplDebug;
-impl ImplTrait for ImplDebug {
-    fn path(&self) -> SimplePath {
-        SimplePath::new(&["", "core", "fmt", "Debug"])
-    }
-
-    fn support_ignore(&self) -> bool {
-        true
-    }
-
-    fn support_using(&self) -> bool {
-        false
-    }
-
-    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
-        let type_name = item.ident.to_string();
-        let mut inner;
-        match &item.fields {
-            Fields::Named(fields) => {
-                inner = quote! { f.debug_struct(#type_name) };
-                let mut no_skips = true;
-                for field in fields.named.iter() {
-                    let ident = field.ident.as_ref().unwrap();
-                    if !args.ignore_named(ident) {
-                        let name = ident.to_string();
-                        inner.append_all(quote! {
-                            .field(#name, &self.#ident)
-                        });
-                    } else {
-                        no_skips = false;
-                    }
-                }
-                if no_skips {
-                    inner.append_all(quote! { .finish() });
-                } else {
-                    inner.append_all(quote! { .finish_non_exhaustive() });
-                };
-            }
-            Fields::Unnamed(fields) => {
-                inner = quote! { f.debug_tuple(#type_name) };
-                for i in 0..fields.unnamed.len() {
-                    let index = Index::from(i);
-                    if !args.ignore_unnamed(&index) {
-                        inner.append_all(quote! {
-                            .field(&self.#index)
-                        });
-                    } else {
-                        inner.append_all(quote! {
-                            .field(&format_args!("_"))
-                        });
-                    }
-                }
-                inner.append_all(quote! { .finish() });
-            }
-            Fields::Unit => inner = quote! { f.write_str(#type_name) },
-        };
-        Ok(quote! {
-            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-                #inner
-            }
-        })
-    }
-}
-
-/// Implement [`core::default::Default`]
-pub struct ImplDefault;
-impl ImplTrait for ImplDefault {
-    fn path(&self) -> SimplePath {
-        SimplePath::new(&["", "core", "default", "Default"])
-    }
-
-    fn support_ignore(&self) -> bool {
-        false
-    }
-
-    fn support_using(&self) -> bool {
-        false
-    }
-
-    fn struct_items(&self, item: &ItemStruct, _: &ImplArgs) -> Result<TokenStream> {
-        let type_ident = &item.ident;
-        let mut inner;
-        match &item.fields {
-            Fields::Named(fields) => {
-                inner = quote! {};
-                for field in fields.named.iter() {
-                    let ident = field.ident.as_ref().unwrap();
-                    inner.append_all(quote! { #ident: Default::default(), });
-                }
-                inner = quote! { #type_ident { #inner } };
-            }
-            Fields::Unnamed(fields) => {
-                inner = quote! {};
-                for _ in 0..fields.unnamed.len() {
-                    inner.append_all(quote! { Default::default(), });
-                }
-                inner = quote! { #type_ident(#inner) };
-            }
-            Fields::Unit => inner = quote! { #type_ident },
-        }
-        Ok(quote! {
-            fn default() -> Self {
-                #inner
-            }
-        })
-    }
-}
-
-/// Implement [`core::ops::Deref`]
-pub struct ImplDeref;
-impl ImplTrait for ImplDeref {
-    fn path(&self) -> SimplePath {
-        SimplePath::new(&["", "core", "ops", "Deref"])
-    }
-
-    fn support_ignore(&self) -> bool {
-        false
-    }
-
-    fn support_using(&self) -> bool {
-        true
-    }
-
-    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
-        if let Some(field) = args.using_field(&item.fields) {
-            let ty = field.ty.clone();
-            let member = args.using_member().unwrap();
-            Ok(quote! {
-                type Target = #ty;
-                fn deref(&self) -> &Self::Target {
-                    &self.#member
-                }
-            })
-        } else {
-            Err(Error::RequireUsing)
-        }
-    }
-}
-
-/// Implement [`core::ops::DerefMut`]
-pub struct ImplDerefMut;
-impl ImplTrait for ImplDerefMut {
-    fn path(&self) -> SimplePath {
-        SimplePath::new(&["", "core", "ops", "DerefMut"])
-    }
-
-    fn support_ignore(&self) -> bool {
-        false
-    }
-
-    fn support_using(&self) -> bool {
-        true
-    }
-
-    fn struct_items(&self, _: &ItemStruct, args: &ImplArgs) -> Result<TokenStream> {
-        if let Some(member) = args.using_member() {
-            Ok(quote! {
-                fn deref_mut(&mut self) -> &mut Self::Target {
-                    &mut self.#member
-                }
-            })
-        } else {
-            Err(Error::RequireUsing)
         }
     }
 }

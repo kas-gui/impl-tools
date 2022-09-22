@@ -26,6 +26,7 @@ pub use for_deref::ForDeref;
 pub use scope::{Scope, ScopeAttr, ScopeItem};
 
 /// Simple, allocation-free path representation
+#[derive(PartialEq, Eq)]
 pub struct SimplePath(&'static [&'static str]);
 
 impl SimplePath {
@@ -106,26 +107,6 @@ impl SimplePath {
             seg.arguments.is_empty() && self.matches_ident(&seg.ident)
         } else {
             self.matches(path)
-        }
-    }
-}
-
-mod printing {
-    use super::SimplePath;
-    use proc_macro2::{Ident, Span, TokenStream};
-    use quote::{quote, ToTokens, TokenStreamExt};
-
-    impl ToTokens for SimplePath {
-        fn to_tokens(&self, tokens: &mut TokenStream) {
-            let mut iter = self.0.iter();
-            let first = iter.next().unwrap();
-            if !first.is_empty() {
-                tokens.append(Ident::new(first, Span::call_site()));
-            }
-            for next in iter {
-                let ident = Ident::new(next, Span::call_site());
-                tokens.append_all(quote! { :: #ident });
-            }
         }
     }
 }

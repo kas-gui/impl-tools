@@ -73,6 +73,7 @@ impl ImplDefault {
         let expr = self.expr.unwrap();
 
         quote! {
+            #[automatically_derived]
             impl #impl_generics core::default::Default for #ident #ty_generics #wc {
                 fn default() -> Self {
                     #expr
@@ -141,6 +142,7 @@ impl ScopeAttr for AttrImplDefault {
             );
 
             scope.generated.push(quote! {
+                #[automatically_derived]
                 impl #impl_generics core::default::Default for #ident #ty_generics #wc {
                     fn default() -> Self {
                         #ident {

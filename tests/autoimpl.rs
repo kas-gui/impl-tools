@@ -11,6 +11,7 @@ use core::ops::DerefMut;
 use impl_tools::autoimpl;
 
 fn test_has_clone(_: impl Clone) {}
+fn test_has_copy(_: impl Copy) {}
 
 #[autoimpl(std::clone::Clone, core::fmt::Debug)]
 struct Unit;
@@ -21,12 +22,13 @@ fn unit() {
     assert_eq!(format!("{:?}", Unit), "Unit");
 }
 
-#[autoimpl(Clone, Debug ignore self.1 where T: trait)]
+#[autoimpl(Copy, Clone, Debug ignore self.1 where T: trait)]
 struct Wrapper<T>(pub T, ());
 
 #[test]
 fn wrapper() {
     test_has_clone(Wrapper(0i32, ()));
+    test_has_copy(Wrapper("foo", ()));
     assert_eq!(format!("{:?}", Wrapper((), ())), "Wrapper((), _)");
 }
 
@@ -52,6 +54,8 @@ fn x() {
 }
 
 #[autoimpl(Deref, DerefMut using self.t)]
+#[autoimpl(Borrow, BorrowMut using self.t)]
+#[autoimpl(AsRef, AsMut using self.t)]
 struct Y<S, T> {
     _s: S,
     t: T,
@@ -59,12 +63,93 @@ struct Y<S, T> {
 
 #[test]
 fn y() {
+    use core::borrow::{Borrow, BorrowMut};
+    use core::ops::Deref;
+
     let mut y = Y { _s: (), t: 1i32 };
 
-    fn set(x: &mut i32) {
-        *x = 2;
-    }
-    set(y.deref_mut());
-
+    *y.deref_mut() = 2;
+    assert_eq!(y.deref(), &2);
     assert_eq!(y.t, 2);
+
+    *y.borrow_mut() = 15;
+    assert_eq!(Borrow::<i32>::borrow(&y), &15);
+
+    *y.as_mut() = 12;
+    assert_eq!(y.as_ref(), &12);
+}
+
+#[autoimpl(PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug)]
+struct Pair(f32, f32);
+
+#[test]
+fn pair() {
+    use core::cmp::Ordering;
+    let a = Pair(123.0, 0.0);
+
+    assert_eq!(a, Pair(123.0, 0.0));
+    assert!(a != Pair(123.0, 0.1));
+    assert!(a != Pair(122.0, 0.0));
+    assert!(a != Pair(123.0, f32::NAN));
+
+    assert!(a < Pair(123.0, 0.1));
+    assert!(a > Pair(123.0, -0.1));
+    assert!(a > Pair(122.0, 0.1));
+    assert_eq!(a.partial_cmp(&Pair(123.0, 0.0)), Some(Ordering::Equal));
+    assert_eq!(a.partial_cmp(&Pair(123.0, f32::NAN)), None);
+}
+
+#[autoimpl(Clone, Debug)]
+#[autoimpl(PartialEq, Eq, PartialOrd, Ord, Hash ignore self._f)]
+struct MixedComponents {
+    i: i32,
+    s: &'static str,
+    _f: fn() -> i32,
+}
+
+#[test]
+fn mixed_components() {
+    use core::cmp::Ordering;
+
+    let a = MixedComponents {
+        i: 31,
+        s: "abc",
+        _f: || 9,
+    };
+    assert_eq!(a, a);
+    assert_eq!(a.cmp(&a), Ordering::Equal);
+    assert_eq!(a.partial_cmp(&a), Some(Ordering::Equal));
+    let a_hash = xx_hash_64_0(&a);
+    assert_eq!(a_hash, 877288650698020945);
+
+    let b = MixedComponents {
+        i: 31,
+        s: "abc",
+        _f: || 14,
+    };
+    assert_eq!(a, b); // field f differs but is ignored
+    assert_eq!(a.cmp(&b), Ordering::Equal);
+    assert_eq!(a.partial_cmp(&b), Some(Ordering::Equal));
+    assert_eq!(xx_hash_64_0(&b), a_hash);
+
+    let mut c = a.clone();
+    c.i = 2;
+    assert!(a != c);
+    assert!(a > c);
+    assert_eq!(Some(a.cmp(&c)), a.partial_cmp(&c));
+    assert!(xx_hash_64_0(&c) != a_hash);
+
+    let mut d = a.clone();
+    d.s = "def";
+    assert!(a != d);
+    assert!(a < d);
+    assert_eq!(Some(a.cmp(&d)), a.partial_cmp(&d));
+    assert!(xx_hash_64_0(&d) != a_hash);
+}
+
+fn xx_hash_64_0(x: impl core::hash::Hash) -> u64 {
+    let mut hasher = twox_hash::XxHash64::with_seed(0);
+    x.hash(&mut hasher);
+    core::hash::Hasher::finish(&hasher)
 }
