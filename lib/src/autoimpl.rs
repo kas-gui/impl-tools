@@ -264,7 +264,10 @@ impl ImplTraits {
         if !self.args.ignores.is_empty() {
             for (target, except_with) in not_supporting_ignore.into_iter() {
                 if let Some(path) = except_with {
-                    if impl_targets.iter().any(|(_span, target_impl)| path == target_impl.path()) {
+                    if impl_targets
+                        .iter()
+                        .any(|(_span, target_impl)| path == target_impl.path())
+                    {
                         continue;
                     }
                 }
@@ -359,7 +362,7 @@ impl ImplArgs {
         self.using.as_ref()
     }
 
-    /// Find find to "use", if any
+    /// Find field to "use", if any
     pub fn using_field<'b>(&self, fields: &'b Fields) -> Option<&'b Field> {
         match fields {
             Fields::Named(fields) => fields.named.iter().find(|field| match self.using {
@@ -379,6 +382,29 @@ impl ImplArgs {
                     })
             }
             Fields::Unit => None,
+        }
+    }
+
+    /// Call the given closure over all non-ignored fields
+    pub fn for_fields<'f>(&self, fields: &'f Fields, mut f: impl FnMut(Member, &'f Field)) {
+        match &fields {
+            Fields::Named(fields) => {
+                for field in fields.named.iter() {
+                    let member = Member::from(field.ident.clone().unwrap());
+                    if !self.ignore(&member) {
+                        f(member, field);
+                    }
+                }
+            }
+            Fields::Unnamed(fields) => {
+                for (i, field) in fields.unnamed.iter().enumerate() {
+                    let member = Member::from(Index::from(i));
+                    if !self.ignore(&member) {
+                        f(member, field);
+                    }
+                }
+            }
+            Fields::Unit => (),
         }
     }
 }

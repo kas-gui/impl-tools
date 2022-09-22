@@ -9,7 +9,7 @@ use super::{ImplArgs, ImplTrait, Result};
 use crate::SimplePath;
 use proc_macro2::TokenStream as Toks;
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{Fields, Index, ItemStruct, Token};
+use syn::{Fields, Index, ItemStruct, Member, Token};
 
 /// Implement [`core::clone::Clone`]
 pub struct ImplClone;
@@ -175,37 +175,19 @@ impl ImplTrait for ImplPartialEq {
     fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
         let mut toks = Toks::new();
         let mut require_sep = false;
-        match &item.fields {
-            Fields::Named(fields) => {
-                for field in fields.named.iter() {
-                    let ident = field.ident.as_ref().unwrap();
-                    if !args.ignore_named(ident) {
-                        if require_sep {
-                            <Token![&&]>::default().to_tokens(&mut toks);
-                        }
-                        toks.append_all(quote! { self.#ident == other.#ident });
-                        require_sep = true;
-                    }
-                }
+        args.for_fields(&item.fields, |member: Member, _| {
+            if require_sep {
+                <Token![&&]>::default().to_tokens(&mut toks);
             }
-            Fields::Unnamed(fields) => {
-                for i in 0..fields.unnamed.len() {
-                    let index = Index::from(i);
-                    if !args.ignore_unnamed(&index) {
-                        if require_sep {
-                            <Token![&&]>::default().to_tokens(&mut toks);
-                        }
-                        toks.append_all(quote! { self.#index == other.#index });
-                        require_sep = true;
-                    }
-                }
-            }
-            Fields::Unit => (),
-        }
+            toks.append_all(quote! { self.#member == other.#member });
+            require_sep = true;
+        });
         if toks.is_empty() {
             toks.append_all(quote! { true });
         }
+
         let method = quote! {
+            #[inline]
             fn eq(&self, other: &Self) -> bool {
                 #toks
             }
