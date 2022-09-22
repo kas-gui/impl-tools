@@ -26,6 +26,7 @@ pub const STD_IMPLS: &[&dyn ImplTrait] = &[
     &ImplDebug,
     &ImplDefault,
     &ImplPartialEq,
+    &ImplEq,
     &ImplBorrow,
     &ImplBorrowMut,
     &ImplAsRef,
@@ -46,6 +47,13 @@ pub trait ImplTrait {
     /// Default implementation: `false`
     fn support_ignore(&self) -> bool {
         false
+    }
+
+    /// If the target does not support `ignore` but does tolerate `ignore` in
+    /// the presence of another target (e.g. `autoimpl(Eq, PartialEq ignore self.foo)`),
+    /// return the path of that other target here.
+    fn allow_ignore_with(&self) -> Option<SimplePath> {
+        None
     }
 
     /// True if this target supports using a field
@@ -229,8 +237,8 @@ impl ImplTraits {
             }
         };
 
-        let mut not_supporting_ignore = None;
-        let mut not_supporting_using = None;
+        let mut not_supporting_ignore = vec![];
+        let mut not_supporting_using = vec![];
 
         let mut impl_targets: Vec<(Span, _)> = Vec::with_capacity(self.targets.len());
         for target in self.targets.drain(..) {
@@ -242,24 +250,30 @@ impl ImplTraits {
                 }
             };
 
-            if not_supporting_ignore.is_none() && !target_impl.support_ignore() {
-                not_supporting_ignore = Some(target.clone());
+            if !target_impl.support_ignore() {
+                let except_with = target_impl.allow_ignore_with();
+                not_supporting_ignore.push((target.clone(), except_with));
             }
-            if not_supporting_using.is_none() && !target_impl.support_using() {
-                not_supporting_using = Some(target.clone());
+            if !target_impl.support_using() {
+                not_supporting_using.push(target.clone());
             }
 
             impl_targets.push((target.span(), target_impl));
         }
 
         if !self.args.ignores.is_empty() {
-            if let Some(ref target) = not_supporting_ignore {
-                emit_error!(target, "target does not support `ignore`-d fields",);
+            for (target, except_with) in not_supporting_ignore.into_iter() {
+                if let Some(path) = except_with {
+                    if impl_targets.iter().any(|(_span, target_impl)| path == target_impl.path()) {
+                        continue;
+                    }
+                }
+                emit_error!(target, "target does not support `ignore`",);
             }
         }
         if self.args.using.is_some() {
-            if let Some(target) = not_supporting_using.as_ref() {
-                emit_error!(target, "`target does not support `using` a field",);
+            for target in not_supporting_using.into_iter() {
+                emit_error!(target, "`target does not support `using`",);
             }
         }
 

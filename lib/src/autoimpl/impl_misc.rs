@@ -213,3 +213,19 @@ impl ImplTrait for ImplPartialEq {
         Ok((quote! { ::core::cmp::PartialEq }, method))
     }
 }
+
+/// Implement [`core::cmp::Eq`]
+pub struct ImplEq;
+impl ImplTrait for ImplEq {
+    fn path(&self) -> SimplePath {
+        SimplePath::new(&["", "core", "cmp", "Eq"])
+    }
+
+    fn allow_ignore_with(&self) -> Option<SimplePath> {
+        Some(SimplePath::new(&["", "core", "cmp", "PartialEq"]))
+    }
+
+    fn struct_items(&self, _: &ItemStruct, _: &ImplArgs) -> Result<(Toks, Toks)> {
+        Ok((quote! { ::core::cmp::Eq }, quote! {}))
+    }
+}

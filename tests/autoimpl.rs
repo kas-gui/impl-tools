@@ -78,7 +78,7 @@ fn y() {
 }
 
 #[autoimpl(Clone, Debug)]
-#[autoimpl(PartialEq ignore self.f)]
+#[autoimpl(PartialEq, Eq ignore self.f)]
 struct MixedComponents {
     i: i32,
     s: &'static str,

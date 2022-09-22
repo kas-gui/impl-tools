@@ -26,6 +26,7 @@ pub use for_deref::ForDeref;
 pub use scope::{Scope, ScopeAttr, ScopeItem};
 
 /// Simple, allocation-free path representation
+#[derive(PartialEq, Eq)]
 pub struct SimplePath(&'static [&'static str]);
 
 impl SimplePath {
