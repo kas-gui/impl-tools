@@ -188,6 +188,8 @@ struct Foo<S, T: ?Sized> {
 }
 ```
 
+Note: `#[derive]` and `Derivative` add bounds like `S: PartialEq, T: PartialEq` on generic parameters by default; `Educe` and `impl-tools` do not.
+
 ### Derive extensions
 
 [derive_more](https://crates.io/crates/derive_more) isn't exactly an "alternative", simply
