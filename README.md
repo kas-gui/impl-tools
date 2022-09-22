@@ -124,7 +124,8 @@ Caveat: `rustfmt` won't currently touch the contents. Hopefully that
 Extensibility
 -------------
 
-Rust's `#[derive]` macro is extensible via `#[proc_macro_derive]` in a `proc-macro` crate. Our macros cannot be extended in the same way, but they can be extended via a new front-end:
+Rust's `#[derive]` macro is extensible via `#[proc_macro_derive]` in a `proc-macro` crate.
+Our macros cannot be extended in the same way, but they can be extended via a new front-end:
 
 1.  Create a copy of the `impl-tools` crate to create a new "front-end" (`proc-macro` crate).
     This crate is contains only a little code over the [`impl-tools-lib`] crate.
@@ -132,31 +133,83 @@ Rust's `#[derive]` macro is extensible via `#[proc_macro_derive]` in a `proc-mac
     To extend `impl_scope!`, write an impl of [`ScopeAttr`] and add it to the macro's definition.
 3.  Depend on your new front end crate instead of `impl-tools`.
 
+For an example of this approach, see [kas-macros](https://github.com/kas-gui/kas/tree/master/crates/kas-macros).
+
 [`impl-tools-lib`]: https://docs.rs/impl-tools-lib/
 [`ImplTrait`]: https://docs.rs/impl-tools-lib/latest/impl_tools_lib/autoimpl/trait.ImplTrait.html
 [`ScopeAttr`]: https://docs.rs/impl-tools-lib/latest/impl_tools_lib/trait.ScopeAttr.html
+
 
 Supported Rust Versions
 ------------------------------
 
 The MSRV is 1.56.0 for no particular reason other than that it is the first to support Edition 2021.
 
+When using a sufficiently recent compiler version (presumably 1.65.0), generic associated types
+are supported (only applicable to `#[autoimpl]` on trait definitions using GATs).
+
 
 Alternatives
 ------------
 
+### Derive alternatives
+
 Both [Educe](https://crates.io/crates/educe) and [Derivative](https://crates.io/crates/derivative)
-have similar functionality: the ability to implement various traits with more flexibility than
-libstd's `#[derive]`. They also support more functionality such as tweaking the output of `Debug`.
-Both have less clean syntax, requiring a minimum of two attributes to do anything, with further
-attributes to customise implementations (e.g. to ignore a field).
+have similar functionality: the ability to implement standard traits with more flexibility than
+libstd's `#[derive]`.
+
+In comparison, impl-tools' `#[autoimpl]` has cleaner syntax but is less flexible:
+```rust,ignore
+#[derive(Derivative)]
+#[derivative(PartialEq, Eq)]
+struct Foo<S, T: ?Sized> {
+    foo: S,
+    #[derivative(PartialEq="ignore")]
+    bar: u8,
+    #[derivative(PartialEq(bound=""), Eq(bound=""))]
+    ptr: *const T,
+}
+
+#[derive(Educe)]
+#[educe(PartialEq(bound = "S: PartialEq"), Eq(bound = "S: Eq"))]
+struct Foo<S, T: ?Sized> {
+    foo: S,
+    #[educe(PartialEq(ignore))]
+    bar: u8,
+    ptr: *const T,
+}
+
+// impl-tools:
+#[autoimpl(PartialEq, Eq ignore self.bar where S: trait)]
+struct Foo<S, T: ?Sized> {
+    foo: S,
+    bar: u8,
+    ptr: *const T,
+}
+```
+
+### Derive extensions
 
 [derive_more](https://crates.io/crates/derive_more) isn't exactly an "alternative", simply
-supporting `#[derive]` for more standard traits. Possible functionality overlap in the future
-(though for now `#[autoimpl]` doesn't support half the traits supported by `#[derive]`).
+supporting `#[derive]` for more standard traits such as `Add` and `From`.
+This is not (currently) supported by `#[autoimpl]` (or, to my knowledge, any alternative).
 
 [auto_impl](https://crates.io/crates/auto_impl/) allows implementing a trait for reference types
-(`&`, `&mut`, `Box`, `Rc`, `Arc`) as well as function types.
+(`&`, `&mut`, `Box`, `Rc`, `Arc`) as well as function types. The former (reference types) is
+supported by `#[autoimpl]` (and is slightly more general):
+```rust,ignore
+// auto_impl:
+#[auto_impl(&, Box)]
+trait Foo {
+    fn foo(&self);
+}
+
+// impl-tools:
+#[autoimpl(for<T: trait + ?Sized> &T, Box<T>)]
+trait Foo {
+    fn foo(&self);
+}
+```
 
 
 Copyright and Licence
