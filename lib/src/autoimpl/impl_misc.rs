@@ -8,8 +8,8 @@
 use super::{ImplArgs, ImplTrait, Result};
 use crate::SimplePath;
 use proc_macro2::TokenStream as Toks;
-use quote::{quote, TokenStreamExt};
-use syn::{Fields, Index, ItemStruct};
+use quote::{quote, ToTokens, TokenStreamExt};
+use syn::{Fields, Index, ItemStruct, Token};
 
 /// Implement [`core::clone::Clone`]
 pub struct ImplClone;
@@ -156,5 +156,60 @@ impl ImplTrait for ImplDefault {
             }
         };
         Ok((quote! { ::core::default::Default }, method))
+    }
+}
+
+/// Implement [`core::cmp::PartialEq`]
+///
+/// Restriction: `Rhs == Self`
+pub struct ImplPartialEq;
+impl ImplTrait for ImplPartialEq {
+    fn path(&self) -> SimplePath {
+        SimplePath::new(&["", "core", "cmp", "PartialEq"])
+    }
+
+    fn support_ignore(&self) -> bool {
+        true
+    }
+
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
+        let mut toks = Toks::new();
+        let mut require_sep = false;
+        match &item.fields {
+            Fields::Named(fields) => {
+                for field in fields.named.iter() {
+                    let ident = field.ident.as_ref().unwrap();
+                    if !args.ignore_named(ident) {
+                        if require_sep {
+                            <Token![&&]>::default().to_tokens(&mut toks);
+                        }
+                        toks.append_all(quote! { self.#ident == other.#ident });
+                        require_sep = true;
+                    }
+                }
+            }
+            Fields::Unnamed(fields) => {
+                for i in 0..fields.unnamed.len() {
+                    let index = Index::from(i);
+                    if !args.ignore_unnamed(&index) {
+                        if require_sep {
+                            <Token![&&]>::default().to_tokens(&mut toks);
+                        }
+                        toks.append_all(quote! { self.#index == other.#index });
+                        require_sep = true;
+                    }
+                }
+            }
+            Fields::Unit => (),
+        }
+        if toks.is_empty() {
+            toks.append_all(quote! { true });
+        }
+        let method = quote! {
+            fn eq(&self, other: &Self) -> bool {
+                #toks
+            }
+        };
+        Ok((quote! { ::core::cmp::PartialEq }, method))
     }
 }

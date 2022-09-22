@@ -76,3 +76,36 @@ fn y() {
     *y.as_mut() = 12;
     assert_eq!(y.as_ref(), &12);
 }
+
+#[autoimpl(Clone, Debug)]
+#[autoimpl(PartialEq ignore self.f)]
+struct MixedComponents {
+    i: i32,
+    s: &'static str,
+    f: fn() -> i32,
+}
+
+#[test]
+fn mixed_components() {
+    let a = MixedComponents {
+        i: 31,
+        s: "abc",
+        f: || 9,
+    };
+    assert_eq!(a, a);
+
+    let b = MixedComponents {
+        i: 31,
+        s: "abc",
+        f: || 14,
+    };
+    assert_eq!(a, b); // field f differs but is ignored
+
+    let mut c = a.clone();
+    c.i = 2;
+    assert!(a != c);
+
+    let mut d = a.clone();
+    d.s = "def";
+    assert!(a != d);
+}
