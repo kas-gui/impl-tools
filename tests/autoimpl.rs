@@ -167,8 +167,16 @@ struct Foo<S, T: ?Sized> {
 fn foo() {
     let x = || 1;
     let ptr = &x as *const _;
-    test_has_partial_eq(Foo { foo: 1f32, bar: 0, ptr });
+    test_has_partial_eq(Foo {
+        foo: 1f32,
+        bar: 0,
+        ptr,
+    });
     // Expected to fail:
     // test_has_eq(Foo { foo: 1f32, bar: 0, ptr });
-    test_has_eq(Foo { foo: 1i32, bar: 0, ptr });
+    test_has_eq(Foo {
+        foo: 1i32,
+        bar: 0,
+        ptr,
+    });
 }
