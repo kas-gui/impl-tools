@@ -23,6 +23,7 @@ pub use impl_using::*;
 /// List of all builtin trait implementations
 pub const STD_IMPLS: &[&dyn ImplTrait] = &[
     &ImplClone,
+    &ImplCopy,
     &ImplDebug,
     &ImplDefault,
     &ImplPartialEq,

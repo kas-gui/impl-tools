@@ -11,6 +11,7 @@ use core::ops::DerefMut;
 use impl_tools::autoimpl;
 
 fn test_has_clone(_: impl Clone) {}
+fn test_has_copy(_: impl Copy) {}
 
 #[autoimpl(std::clone::Clone, core::fmt::Debug)]
 struct Unit;
@@ -21,12 +22,13 @@ fn unit() {
     assert_eq!(format!("{:?}", Unit), "Unit");
 }
 
-#[autoimpl(Clone, Debug ignore self.1 where T: trait)]
+#[autoimpl(Copy, Clone, Debug ignore self.1 where T: trait)]
 struct Wrapper<T>(pub T, ());
 
 #[test]
 fn wrapper() {
     test_has_clone(Wrapper(0i32, ()));
+    test_has_copy(Wrapper("foo", ()));
     assert_eq!(format!("{:?}", Wrapper((), ())), "Wrapper((), _)");
 }
 

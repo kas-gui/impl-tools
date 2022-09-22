@@ -60,6 +60,22 @@ impl ImplTrait for ImplClone {
     }
 }
 
+/// Implement [`core::marker::Copy`]
+pub struct ImplCopy;
+impl ImplTrait for ImplCopy {
+    fn path(&self) -> SimplePath {
+        SimplePath::new(&["", "core", "marker", "Copy"])
+    }
+
+    fn allow_ignore_with(&self) -> Option<SimplePath> {
+        Some(SimplePath::new(&["", "core", "clone", "Clone"]))
+    }
+
+    fn struct_items(&self, _: &ItemStruct, _: &ImplArgs) -> Result<(Toks, Toks)> {
+        Ok((quote! { ::core::marker::Copy }, quote! {}))
+    }
+}
+
 /// Implement [`core::fmt::Debug`]
 pub struct ImplDebug;
 impl ImplTrait for ImplDebug {
