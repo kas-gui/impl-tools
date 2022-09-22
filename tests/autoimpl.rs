@@ -99,7 +99,7 @@ fn pair() {
 }
 
 #[autoimpl(Clone, Debug)]
-#[autoimpl(PartialEq, Eq, PartialOrd, Ord ignore self.f)]
+#[autoimpl(PartialEq, Eq, PartialOrd, Ord, Hash ignore self.f)]
 struct MixedComponents {
     i: i32,
     s: &'static str,
@@ -118,6 +118,8 @@ fn mixed_components() {
     assert_eq!(a, a);
     assert_eq!(a.cmp(&a), Ordering::Equal);
     assert_eq!(a.partial_cmp(&a), Some(Ordering::Equal));
+    let a_hash = xx_hash_64_0(&a);
+    assert_eq!(a_hash, 877288650698020945);
 
     let b = MixedComponents {
         i: 31,
@@ -127,16 +129,25 @@ fn mixed_components() {
     assert_eq!(a, b); // field f differs but is ignored
     assert_eq!(a.cmp(&b), Ordering::Equal);
     assert_eq!(a.partial_cmp(&b), Some(Ordering::Equal));
+    assert_eq!(xx_hash_64_0(&b), a_hash);
 
     let mut c = a.clone();
     c.i = 2;
     assert!(a != c);
     assert!(a > c);
     assert_eq!(Some(a.cmp(&c)), a.partial_cmp(&c));
+    assert!(xx_hash_64_0(&c) != a_hash);
 
     let mut d = a.clone();
     d.s = "def";
     assert!(a != d);
     assert!(a < d);
     assert_eq!(Some(a.cmp(&d)), a.partial_cmp(&d));
+    assert!(xx_hash_64_0(&d) != a_hash);
+}
+
+fn xx_hash_64_0(x: impl core::hash::Hash) -> u64 {
+    let mut hasher = twox_hash::XxHash64::with_seed(0);
+    x.hash(&mut hasher);
+    core::hash::Hasher::finish(&hasher)
 }

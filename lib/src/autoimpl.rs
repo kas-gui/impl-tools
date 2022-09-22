@@ -29,6 +29,7 @@ pub const STD_IMPLS: &[&dyn ImplTrait] = &[
     &ImplEq,
     &ImplPartialOrd,
     &ImplOrd,
+    &ImplHash,
     &ImplBorrow,
     &ImplBorrowMut,
     &ImplAsRef,

@@ -294,3 +294,30 @@ impl ImplTrait for ImplOrd {
         Ok((quote! { ::core::cmp::Ord }, method))
     }
 }
+
+/// Implement [`core::hash::Hash`]
+pub struct ImplHash;
+impl ImplTrait for ImplHash {
+    fn path(&self) -> SimplePath {
+        SimplePath::new(&["", "core", "hash", "Hash"])
+    }
+
+    fn support_ignore(&self) -> bool {
+        true
+    }
+
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
+        let mut toks = Toks::new();
+        args.for_fields_iter(item.fields.iter().enumerate().rev(), |member: Member, _| {
+            toks.append_all(quote! { ::core::hash::Hash::hash(&self.#member, state); });
+        });
+
+        let method = quote! {
+            #[inline]
+            fn hash<__H: ::core::hash::Hasher>(&self, state: &mut __H) {
+                #toks
+            }
+        };
+        Ok((quote! { ::core::hash::Hash }, method))
+    }
+}
