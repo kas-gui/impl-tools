@@ -18,10 +18,6 @@ impl ImplTrait for ImplBorrow {
         SimplePath::new(&["", "core", "borrow", "Borrow"])
     }
 
-    fn support_ignore(&self) -> bool {
-        false
-    }
-
     fn support_using(&self) -> bool {
         true
     }
@@ -47,10 +43,6 @@ pub struct ImplBorrowMut;
 impl ImplTrait for ImplBorrowMut {
     fn path(&self) -> SimplePath {
         SimplePath::new(&["", "core", "borrow", "BorrowMut"])
-    }
-
-    fn support_ignore(&self) -> bool {
-        false
     }
 
     fn support_using(&self) -> bool {
@@ -80,10 +72,6 @@ impl ImplTrait for ImplAsRef {
         SimplePath::new(&["", "core", "convert", "AsRef"])
     }
 
-    fn support_ignore(&self) -> bool {
-        false
-    }
-
     fn support_using(&self) -> bool {
         true
     }
@@ -109,10 +97,6 @@ pub struct ImplAsMut;
 impl ImplTrait for ImplAsMut {
     fn path(&self) -> SimplePath {
         SimplePath::new(&["", "core", "convert", "AsMut"])
-    }
-
-    fn support_ignore(&self) -> bool {
-        false
     }
 
     fn support_using(&self) -> bool {
@@ -142,10 +126,6 @@ impl ImplTrait for ImplDeref {
         SimplePath::new(&["", "core", "ops", "Deref"])
     }
 
-    fn support_ignore(&self) -> bool {
-        false
-    }
-
     fn support_using(&self) -> bool {
         true
     }
@@ -172,10 +152,6 @@ pub struct ImplDerefMut;
 impl ImplTrait for ImplDerefMut {
     fn path(&self) -> SimplePath {
         SimplePath::new(&["", "core", "ops", "DerefMut"])
-    }
-
-    fn support_ignore(&self) -> bool {
-        false
     }
 
     fn support_using(&self) -> bool {

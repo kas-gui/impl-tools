@@ -22,10 +22,6 @@ impl ImplTrait for ImplClone {
         true
     }
 
-    fn support_using(&self) -> bool {
-        false
-    }
-
     fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
         let type_ident = &item.ident;
         let inner = match &item.fields {
@@ -73,10 +69,6 @@ impl ImplTrait for ImplDebug {
 
     fn support_ignore(&self) -> bool {
         true
-    }
-
-    fn support_using(&self) -> bool {
-        false
     }
 
     fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
@@ -135,14 +127,6 @@ pub struct ImplDefault;
 impl ImplTrait for ImplDefault {
     fn path(&self) -> SimplePath {
         SimplePath::new(&["", "core", "default", "Default"])
-    }
-
-    fn support_ignore(&self) -> bool {
-        false
-    }
-
-    fn support_using(&self) -> bool {
-        false
     }
 
     fn struct_items(&self, item: &ItemStruct, _: &ImplArgs) -> Result<(Toks, Toks)> {

@@ -33,6 +33,62 @@ pub const STD_IMPLS: &[&dyn ImplTrait] = &[
     &ImplDerefMut,
 ];
 
+/// Trait required by extensions
+pub trait ImplTrait {
+    /// Trait path
+    ///
+    /// This path is matched against trait names in `#[autoimpl]` parameters.
+    fn path(&self) -> SimplePath;
+
+    /// True if this target supports ignoring fields
+    ///
+    /// Default implementation: `false`
+    fn support_ignore(&self) -> bool {
+        false
+    }
+
+    /// True if this target supports using a field
+    ///
+    /// Default implementation: `false`
+    fn support_using(&self) -> bool {
+        false
+    }
+
+    /// Generate an impl for a struct item
+    ///
+    /// The default implementation is a wrapper around [`Self::struct_items`]
+    /// and suffices for most cases. It may be overridden, e.g. to generate
+    /// multiple implementation items. It is not recommended to modify the
+    /// generics.
+    fn struct_impl(&self, item: &ItemStruct, args: &ImplArgs) -> Result<Toks> {
+        let type_ident = &item.ident;
+        let (impl_generics, ty_generics, item_wc) = item.generics.split_for_impl();
+
+        let (path, items) = self.struct_items(item, args)?;
+
+        let wc = clause_to_toks(&args.clause, item_wc, &path);
+
+        Ok(quote! {
+            impl #impl_generics #path for #type_ident #ty_generics #wc {
+                #items
+            }
+        })
+    }
+
+    /// Generate struct items
+    ///
+    /// On success, this method returns the tuple `(trait_path, items)`. These
+    /// are used to generate the following implementation:
+    /// ```
+    /// impl #impl_generics #trait_path for #type_ident #ty_generics #where_clause {
+    ///     #items
+    /// }
+    /// ```
+    ///
+    /// Note: this method is *only* called by the default implementation of [`Self::struct_impl`].
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)>;
+}
+
 #[allow(non_camel_case_types)]
 mod kw {
     use syn::custom_keyword;
@@ -310,52 +366,4 @@ impl ImplArgs {
             Fields::Unit => None,
         }
     }
-}
-
-/// Trait required by extensions
-pub trait ImplTrait {
-    /// Trait path
-    ///
-    /// This path is matched against trait names in `#[autoimpl]` parameters.
-    fn path(&self) -> SimplePath;
-
-    /// True if this target supports ignoring fields
-    fn support_ignore(&self) -> bool;
-
-    /// True if this target supports using a field
-    fn support_using(&self) -> bool;
-
-    /// Generate an impl for a struct item
-    ///
-    /// The default implementation is a wrapper around [`Self::struct_items`]
-    /// and suffices for most cases. It may be overridden, e.g. to generate
-    /// multiple implementation items. It is not recommended to modify the
-    /// generics.
-    fn struct_impl(&self, item: &ItemStruct, args: &ImplArgs) -> Result<Toks> {
-        let type_ident = &item.ident;
-        let (impl_generics, ty_generics, item_wc) = item.generics.split_for_impl();
-
-        let (path, items) = self.struct_items(item, args)?;
-
-        let wc = clause_to_toks(&args.clause, item_wc, &path);
-
-        Ok(quote! {
-            impl #impl_generics #path for #type_ident #ty_generics #wc {
-                #items
-            }
-        })
-    }
-
-    /// Generate struct items
-    ///
-    /// On success, this method returns the tuple `(trait_path, items)`. These
-    /// are used to generate the following implementation:
-    /// ```
-    /// impl #impl_generics #trait_path for #type_ident #ty_generics #where_clause {
-    ///     #items
-    /// }
-    /// ```
-    ///
-    /// Note: this method is *only* called by the default implementation of [`Self::struct_impl`].
-    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)>;
 }
