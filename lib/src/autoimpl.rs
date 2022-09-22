@@ -82,6 +82,7 @@ pub trait ImplTrait {
         let wc = clause_to_toks(&args.clause, item_wc, &path);
 
         Ok(quote! {
+            #[automatically_derived]
             impl #impl_generics #path for #type_ident #ty_generics #wc {
                 #items
             }

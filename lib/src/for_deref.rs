@@ -255,6 +255,7 @@ impl ForDeref {
             }
 
             toks.append_all(quote! {
+                #[automatically_derived]
                 impl #impl_generics #trait_ty for #target #where_clause {
                     #impl_items
                 }

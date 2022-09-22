@@ -101,11 +101,11 @@ fn pair() {
 }
 
 #[autoimpl(Clone, Debug)]
-#[autoimpl(PartialEq, Eq, PartialOrd, Ord, Hash ignore self.f)]
+#[autoimpl(PartialEq, Eq, PartialOrd, Ord, Hash ignore self._f)]
 struct MixedComponents {
     i: i32,
     s: &'static str,
-    f: fn() -> i32,
+    _f: fn() -> i32,
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn mixed_components() {
     let a = MixedComponents {
         i: 31,
         s: "abc",
-        f: || 9,
+        _f: || 9,
     };
     assert_eq!(a, a);
     assert_eq!(a.cmp(&a), Ordering::Equal);
@@ -126,7 +126,7 @@ fn mixed_components() {
     let b = MixedComponents {
         i: 31,
         s: "abc",
-        f: || 14,
+        _f: || 14,
     };
     assert_eq!(a, b); // field f differs but is ignored
     assert_eq!(a.cmp(&b), Ordering::Equal);
