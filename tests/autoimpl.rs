@@ -77,8 +77,29 @@ fn y() {
     assert_eq!(y.as_ref(), &12);
 }
 
+#[autoimpl(PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug)]
+struct Pair(f32, f32);
+
+#[test]
+fn pair() {
+    use core::cmp::Ordering;
+    let a = Pair(123.0, 0.0);
+
+    assert_eq!(a, Pair(123.0, 0.0));
+    assert!(a != Pair(123.0, 0.1));
+    assert!(a != Pair(122.0, 0.0));
+    assert!(a != Pair(123.0, f32::NAN));
+
+    assert!(a < Pair(123.0, 0.1));
+    assert!(a > Pair(123.0, -0.1));
+    assert!(a > Pair(122.0, 0.1));
+    assert_eq!(a.partial_cmp(&Pair(123.0, 0.0)), Some(Ordering::Equal));
+    assert_eq!(a.partial_cmp(&Pair(123.0, f32::NAN)), None);
+}
+
 #[autoimpl(Clone, Debug)]
-#[autoimpl(PartialEq, Eq ignore self.f)]
+#[autoimpl(PartialEq, Eq, PartialOrd, Ord ignore self.f)]
 struct MixedComponents {
     i: i32,
     s: &'static str,
@@ -87,12 +108,16 @@ struct MixedComponents {
 
 #[test]
 fn mixed_components() {
+    use core::cmp::Ordering;
+
     let a = MixedComponents {
         i: 31,
         s: "abc",
         f: || 9,
     };
     assert_eq!(a, a);
+    assert_eq!(a.cmp(&a), Ordering::Equal);
+    assert_eq!(a.partial_cmp(&a), Some(Ordering::Equal));
 
     let b = MixedComponents {
         i: 31,
@@ -100,12 +125,18 @@ fn mixed_components() {
         f: || 14,
     };
     assert_eq!(a, b); // field f differs but is ignored
+    assert_eq!(a.cmp(&b), Ordering::Equal);
+    assert_eq!(a.partial_cmp(&b), Some(Ordering::Equal));
 
     let mut c = a.clone();
     c.i = 2;
     assert!(a != c);
+    assert!(a > c);
+    assert_eq!(Some(a.cmp(&c)), a.partial_cmp(&c));
 
     let mut d = a.clone();
     d.s = "def";
     assert!(a != d);
+    assert!(a < d);
+    assert_eq!(Some(a.cmp(&d)), a.partial_cmp(&d));
 }

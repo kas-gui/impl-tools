@@ -27,6 +27,8 @@ pub const STD_IMPLS: &[&dyn ImplTrait] = &[
     &ImplDefault,
     &ImplPartialEq,
     &ImplEq,
+    &ImplPartialOrd,
+    &ImplOrd,
     &ImplBorrow,
     &ImplBorrowMut,
     &ImplAsRef,
@@ -386,25 +388,24 @@ impl ImplArgs {
     }
 
     /// Call the given closure over all non-ignored fields
-    pub fn for_fields<'f>(&self, fields: &'f Fields, mut f: impl FnMut(Member, &'f Field)) {
-        match &fields {
-            Fields::Named(fields) => {
-                for field in fields.named.iter() {
-                    let member = Member::from(field.ident.clone().unwrap());
-                    if !self.ignore(&member) {
-                        f(member, field);
-                    }
-                }
+    pub fn for_fields<'f>(&self, fields: &'f Fields, f: impl FnMut(Member, &'f Field)) {
+        self.for_fields_iter(fields.iter().enumerate(), f);
+    }
+
+    /// Call the given closure over all non-ignored fields
+    pub fn for_fields_iter<'f>(
+        &self,
+        fields: impl Iterator<Item = (usize, &'f Field)>,
+        mut f: impl FnMut(Member, &'f Field),
+    ) {
+        for (i, field) in fields {
+            let member = match field.ident.clone() {
+                Some(ident) => Member::Named(ident),
+                None => Member::Unnamed(Index::from(i)),
+            };
+            if !self.ignore(&member) {
+                f(member, field);
             }
-            Fields::Unnamed(fields) => {
-                for (i, field) in fields.unnamed.iter().enumerate() {
-                    let member = Member::from(Index::from(i));
-                    if !self.ignore(&member) {
-                        f(member, field);
-                    }
-                }
-            }
-            Fields::Unit => (),
         }
     }
 }

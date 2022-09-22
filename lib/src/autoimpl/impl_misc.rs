@@ -183,7 +183,7 @@ impl ImplTrait for ImplPartialEq {
             require_sep = true;
         });
         if toks.is_empty() {
-            toks.append_all(quote! { true });
+            toks = quote! { true };
         }
 
         let method = quote! {
@@ -209,5 +209,88 @@ impl ImplTrait for ImplEq {
 
     fn struct_items(&self, _: &ItemStruct, _: &ImplArgs) -> Result<(Toks, Toks)> {
         Ok((quote! { ::core::cmp::Eq }, quote! {}))
+    }
+}
+
+/// Implement [`core::cmp::PartialOrd`]
+///
+/// Restriction: `Rhs == Self`
+pub struct ImplPartialOrd;
+impl ImplTrait for ImplPartialOrd {
+    fn path(&self) -> SimplePath {
+        SimplePath::new(&["", "core", "cmp", "PartialOrd"])
+    }
+
+    fn support_ignore(&self) -> bool {
+        true
+    }
+
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
+        let mut toks = Toks::new();
+        args.for_fields_iter(item.fields.iter().enumerate().rev(), |member: Member, _| {
+            let cmp =
+                quote! { ::core::cmp::PartialOrd::partial_cmp(&self.#member, &other.#member) };
+            if toks.is_empty() {
+                toks = cmp;
+            } else {
+                toks = quote! {
+                    match #cmp {
+                        ::core::option::Option::Some(::core::cmp::Ordering::Equal) => #toks,
+                        cmp => cmp,
+                    }
+                }
+            }
+        });
+        if toks.is_empty() {
+            toks = quote! { ::core::option::Option::Some(::core::cmp::Ordering::Equal) };
+        }
+
+        let method = quote! {
+            #[inline]
+            fn partial_cmp(&self, other: &Self) -> ::core::option::Option<::core::cmp::Ordering> {
+                #toks
+            }
+        };
+        Ok((quote! { ::core::cmp::PartialOrd }, method))
+    }
+}
+
+/// Implement [`core::cmp::Ord`]
+pub struct ImplOrd;
+impl ImplTrait for ImplOrd {
+    fn path(&self) -> SimplePath {
+        SimplePath::new(&["", "core", "cmp", "Ord"])
+    }
+
+    fn support_ignore(&self) -> bool {
+        true
+    }
+
+    fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
+        let mut toks = Toks::new();
+        args.for_fields_iter(item.fields.iter().enumerate().rev(), |member: Member, _| {
+            let cmp = quote! { ::core::cmp::Ord::cmp(&self.#member, &other.#member) };
+            if toks.is_empty() {
+                toks = cmp;
+            } else {
+                toks = quote! {
+                    match #cmp {
+                        ::core::cmp::Ordering::Equal => #toks,
+                        cmp => cmp,
+                    }
+                }
+            }
+        });
+        if toks.is_empty() {
+            toks = quote! { ::core::cmp::Ordering::Equal };
+        }
+
+        let method = quote! {
+            #[inline]
+            fn cmp(&self, other: &Self) -> ::core::cmp::Ordering {
+                #toks
+            }
+        };
+        Ok((quote! { ::core::cmp::Ord }, method))
     }
 }
