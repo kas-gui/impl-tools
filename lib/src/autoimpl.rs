@@ -93,7 +93,7 @@ pub trait ImplTrait {
     ///
     /// On success, this method returns the tuple `(trait_path, items)`. These
     /// are used to generate the following implementation:
-    /// ```
+    /// ```ignore
     /// impl #impl_generics #trait_path for #type_ident #ty_generics #where_clause {
     ///     #items
     /// }
