@@ -2,6 +2,10 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2022-09-23
+
+-   Fix: do not copy attributes on trait items (#24)
+
 ## [0.5.0] — 2022-09-22
 
 -   `#[autoimpl]` on traits now merges trait generics with macro generics (#21)
