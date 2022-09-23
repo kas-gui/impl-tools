@@ -173,7 +173,6 @@ impl ForDeref {
             for item in &item.items {
                 match item {
                     TraitItem::Const(item) => {
-                        tokens.append_all(item.attrs.outer());
                         item.const_token.to_tokens(tokens);
                         item.ident.to_tokens(tokens);
                         item.colon_token.to_tokens(tokens);
@@ -202,7 +201,6 @@ impl ForDeref {
                             continue;
                         }
 
-                        tokens.append_all(item.attrs.outer());
                         item.sig.to_tokens(tokens);
 
                         let ident = &item.sig.ident;
@@ -222,7 +220,6 @@ impl ForDeref {
                             );
                         }
 
-                        tokens.append_all(item.attrs.outer());
                         item.type_token.to_tokens(tokens);
                         item.ident.to_tokens(tokens);
 
