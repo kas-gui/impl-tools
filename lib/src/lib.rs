@@ -21,7 +21,7 @@ mod for_deref;
 pub mod generics;
 mod scope;
 
-pub use default::{AttrImplDefault, ImplDefault};
+pub use default::{find_attr_impl_default, AttrImplDefault, ImplDefault};
 pub use for_deref::ForDeref;
 pub use scope::{Scope, ScopeAttr, ScopeItem};
 

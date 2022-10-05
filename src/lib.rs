@@ -39,7 +39,7 @@ use proc_macro::TokenStream;
 use proc_macro_error::{emit_call_site_error, proc_macro_error};
 use syn::parse_macro_input;
 
-use impl_tools_lib::{autoimpl, AttrImplDefault, ImplDefault, Scope, ScopeAttr};
+use impl_tools_lib::{self as lib, autoimpl};
 
 /// Impl `Default` with given field or type initializers
 ///
@@ -94,7 +94,7 @@ use impl_tools_lib::{autoimpl, AttrImplDefault, ImplDefault, Scope, ScopeAttr};
 #[proc_macro_error]
 pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
     let mut toks = item.clone();
-    match syn::parse::<ImplDefault>(args) {
+    match syn::parse::<lib::ImplDefault>(args) {
         Ok(attr) => toks.extend(TokenStream::from(attr.expand(item.into()))),
         Err(err) => {
             emit_call_site_error!(err);
@@ -337,12 +337,7 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_error]
 #[proc_macro]
 pub fn impl_scope(input: TokenStream) -> TokenStream {
-    let mut scope = parse_macro_input!(input as Scope);
-    scope.apply_attrs(|path| {
-        AttrImplDefault
-            .path()
-            .matches(path)
-            .then(|| &AttrImplDefault as &dyn ScopeAttr)
-    });
+    let mut scope = parse_macro_input!(input as lib::Scope);
+    scope.apply_attrs(lib::find_attr_impl_default);
     scope.expand().into()
 }
