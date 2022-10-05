@@ -19,4 +19,4 @@ proc-macro-error = "1.0"
 version = "1.0.14"
 # We need 'extra-traits' for equality testing
 # We need 'full' for parsing macros within macro arguments
-features = ["extra-traits", "full"]
+features = ["extra-traits", "full", "visit", "visit-mut"]

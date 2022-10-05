@@ -341,3 +341,52 @@ pub fn impl_scope(input: TokenStream) -> TokenStream {
     scope.apply_attrs(lib::find_attr_impl_default);
     scope.expand().into()
 }
+
+/// Construct a single-instance struct
+///
+/// Rust doesn't currently support [`impl Trait { ... }` expressions](https://github.com/canndrew/rfcs/blob/impl-trait-expressions/text/0000-impl-trait-expressions.md)
+/// or implicit typing of struct fields. This macro is a **hack** allowing that.
+///
+/// Example:
+/// ```
+/// use std::fmt;
+/// fn main() {
+///     let world = "world";
+///     let says_hello_world = impl_tools::singleton! {
+///         struct(&'static str = world);
+///         impl fmt::Display for Self {
+///             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+///                 write!(f, "hello {}", self.0)
+///             }
+///         }
+///     };
+///     assert_eq!(format!("{}", says_hello_world), "hello world");
+/// }
+/// ```
+///
+/// That is, this macro creates an anonymous struct type (must be a struct),
+/// which may have trait implementations, then creates an instance of that
+/// struct.
+///
+/// Struct fields may have a fixed type or may be generic. Syntax is as follows:
+///
+/// -   **regular struct:** `ident: ty = value`
+/// -   **regular struct:** `ident: ty` (uses `Default` to construct value)
+/// -   **regular struct:** `ident = value` (type is generic without bounds)
+/// -   **tuple struct:** `ty = value`
+/// -   **tuple struct:** `ty` (uses `Default` to construct value)
+///
+/// The field name, `ident`, may be `_` (anonymous field).
+///
+/// The field type, `ty`, may be or may contain inferred types (`_`) and/or
+/// `impl Trait` type expressions. These are substituted with generics on the
+/// type.
+///
+/// Refer to [examples](https://github.com/search?q=singleton+repo%3Akas-gui%2Fkas+path%3Aexamples&type=Code) for usage.
+#[proc_macro_error]
+#[proc_macro]
+pub fn singleton(input: TokenStream) -> TokenStream {
+    let mut scope = parse_macro_input!(input as lib::Singleton).into_scope();
+    scope.apply_attrs(lib::find_attr_impl_default);
+    scope.expand().into()
+}

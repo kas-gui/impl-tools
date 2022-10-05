@@ -20,10 +20,12 @@ pub mod fields;
 mod for_deref;
 pub mod generics;
 mod scope;
+mod singleton;
 
 pub use default::{find_attr_impl_default, AttrImplDefault, ImplDefault};
 pub use for_deref::ForDeref;
 pub use scope::{Scope, ScopeAttr, ScopeItem};
+pub use singleton::{Singleton, SingletonField, SingletonScope};
 
 /// Simple, allocation-free path representation
 #[derive(PartialEq, Eq)]
