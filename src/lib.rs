@@ -26,6 +26,10 @@
 //! -   Evaluation of advanced attribute macros, which may use field
 //!     initializers and read/write other impls within the scope
 //!
+//! `singleton!` is a function-like macro used to define and instantiate a
+//! unique (single-use) type. It supports everything supported by `impl_scope!`
+//! plus field initializers and (limited) automatic typing of fields.
+//!
 //! User-extensions to both `#[autoimpl]` and `impl_scope!` are possible, by
 //! writing your own proc-macro crate depending on
 //! [impl-tools-lib](https://crates.io/crates/impl-tools-lib).
@@ -39,7 +43,7 @@ use proc_macro::TokenStream;
 use proc_macro_error::{emit_call_site_error, proc_macro_error};
 use syn::parse_macro_input;
 
-use impl_tools_lib::{autoimpl, AttrImplDefault, ImplDefault, Scope, ScopeAttr};
+use impl_tools_lib::{self as lib, autoimpl};
 
 /// Impl `Default` with given field or type initializers
 ///
@@ -94,7 +98,7 @@ use impl_tools_lib::{autoimpl, AttrImplDefault, ImplDefault, Scope, ScopeAttr};
 #[proc_macro_error]
 pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
     let mut toks = item.clone();
-    match syn::parse::<ImplDefault>(args) {
+    match syn::parse::<lib::ImplDefault>(args) {
         Ok(attr) => toks.extend(TokenStream::from(attr.expand(item.into()))),
         Err(err) => {
             emit_call_site_error!(err);
@@ -286,15 +290,25 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Scope supporting `impl Self` and advanced attribute macros
 ///
-/// This macro has three raisons d'être:
-///
-/// -   To support `impl Self` syntax
-/// -   To allow field initializers, as used by [`macro@impl_default`]
-/// -   To allow user-defined attribute macros to read/write other impls within
-///     the `impl_scope`
+/// This macro facilitates definition of a type (struct, enum or union) plus
+/// implementations via `impl Self { .. }` syntax: `Self` is expanded to the
+/// type's name, including generics and bounds (as defined on the type).
 ///
 /// Caveat: `rustfmt` can not yet format contents (see
-/// [rustfmt#5254](https://github.com/rust-lang/rustfmt/issues/5254)).
+/// [rustfmt#5254](https://github.com/rust-lang/rustfmt/issues/5254),
+/// [rustfmt#5538](https://github.com/rust-lang/rustfmt/pull/5538)).
+///
+/// ## Special attribute macros
+///
+/// Additionally, `impl_scope!` supports special attribute macros evaluated
+/// within its scope:
+///
+/// -   [`#[impl_default]`](macro@impl_default): implement [`Default`] using
+///     field initializers (which are not legal syntax outside of `impl_scope!`)
+///
+/// Note: matching these macros within `impl_scope!` does not use path
+/// resolution. Using `#[impl_tools::impl_default]` would resolve the variant
+/// of this macro which *doesn't support* field initializers.
 ///
 /// ## Syntax
 ///
@@ -337,12 +351,56 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_error]
 #[proc_macro]
 pub fn impl_scope(input: TokenStream) -> TokenStream {
-    let mut scope = parse_macro_input!(input as Scope);
-    scope.apply_attrs(|path| {
-        AttrImplDefault
-            .path()
-            .matches(path)
-            .then(|| &AttrImplDefault as &dyn ScopeAttr)
-    });
+    let mut scope = parse_macro_input!(input as lib::Scope);
+    scope.apply_attrs(lib::find_attr_impl_default);
+    scope.expand().into()
+}
+
+/// Construct a single-instance struct
+///
+/// Rust doesn't currently support [`impl Trait { ... }` expressions](https://github.com/canndrew/rfcs/blob/impl-trait-expressions/text/0000-impl-trait-expressions.md)
+/// or implicit typing of struct fields. This macro is a **hack** allowing that.
+///
+/// Example:
+/// ```
+/// use std::fmt;
+/// fn main() {
+///     let world = "world";
+///     let says_hello_world = impl_tools::singleton! {
+///         struct(&'static str = world);
+///         impl fmt::Display for Self {
+///             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+///                 write!(f, "hello {}", self.0)
+///             }
+///         }
+///     };
+///     assert_eq!(format!("{}", says_hello_world), "hello world");
+/// }
+/// ```
+///
+/// That is, this macro creates an anonymous struct type (must be a struct),
+/// which may have trait implementations, then creates an instance of that
+/// struct.
+///
+/// Struct fields may have a fixed type or may be generic. Syntax is as follows:
+///
+/// -   **regular struct:** `ident: ty = value`
+/// -   **regular struct:** `ident: ty` (uses `Default` to construct value)
+/// -   **regular struct:** `ident = value` (type is generic without bounds)
+/// -   **tuple struct:** `ty = value`
+/// -   **tuple struct:** `ty` (uses `Default` to construct value)
+///
+/// The field name, `ident`, may be `_` (anonymous field).
+///
+/// The field type, `ty`, may be or may contain inferred types (`_`) and/or
+/// `impl Trait` type expressions. These are substituted with generics on the
+/// type.
+///
+/// Refer to [examples](https://github.com/search?q=singleton+repo%3Akas-gui%2Fkas+path%3Aexamples&type=Code) for usage.
+#[proc_macro_error]
+#[proc_macro]
+pub fn singleton(input: TokenStream) -> TokenStream {
+    let mut scope = parse_macro_input!(input as lib::Singleton).into_scope();
+    scope.apply_attrs(lib::find_attr_impl_default);
     scope.expand().into()
 }

@@ -1,11 +1,13 @@
 Impl-tools library
 =======
 
-This is the library behind the [impl-tools](https://crates.io/crates/impl-tools) crate.
+This is the library behind the [impl-tools] crate.
 
-The only reason to use this library directly is to extend the impl-tools macros
-to support custom traits in `#[autoimpl]` or custom attributes evaluated from
-`impl_scope!`.
+This library may be used directly to write custom variants of the [impl-tools]
+macros, for example extending `#[autoimpl]` to support other traits or
+writing new attribute macros to be evaluated within a `impl_scope!`.
+
+[impl-tools]: https://crates.io/crates/impl-tools
 
 
 Copyright and Licence

@@ -12,6 +12,17 @@ use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{token, Attribute, Expr, Ident, Token, Type, Visibility};
 
+/// Struct style: unit/tuple/regular
+#[derive(Debug)]
+pub enum StructStyle {
+    /// A unit struct (e.g. `struct Foo;`)
+    Unit(Token![;]),
+    /// A tuple struct (e.g. `struct Foo(f32, f32);`)
+    Tuple(token::Paren, Token![;]),
+    /// A regular struct (e.g. `struct Foo { x: f32, y: f32 }`)
+    Regular(token::Brace),
+}
+
 /// Data stored within an enum variant or struct.
 ///
 /// This is a variant of [`syn::Fields`] supporting field initializers.

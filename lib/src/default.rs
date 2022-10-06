@@ -181,3 +181,13 @@ impl Parse for ImplDefault {
         })
     }
 }
+
+/// Helper fn which can be passed to [`Scope::apply_attrs`]
+///
+/// This optionally matches [`AttrImplDefault`].
+pub fn find_attr_impl_default(path: &syn::Path) -> Option<&'static dyn ScopeAttr> {
+    AttrImplDefault
+        .path()
+        .matches(path)
+        .then(|| &AttrImplDefault as &dyn ScopeAttr)
+}
