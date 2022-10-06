@@ -71,12 +71,10 @@ fn main() {
 `#[impl_default]` implements `std::default::Default`:
 
 ```rust
-use impl_tools::{impl_default, impl_scope};
-
-#[impl_default(Tree::Ash)]
+#[impl_tools::impl_default(Tree::Ash)]
 enum Tree { Ash, Beech, Birch, Willow }
 
-impl_scope! {
+impl_tools::impl_scope! {
     #[impl_default]
     struct Copse {
         tree_type: Tree,
@@ -85,16 +83,17 @@ impl_scope! {
 }
 ```
 
+Note: `#[impl_default]` is matched within an `impl_scope!` regardless of imports.
+
 ### Impl Scope
 
 `impl_scope!` is a function-like macro used to define a type plus its
 implementations. It supports `impl Self` syntax:
 
 ```rust
-use impl_tools::impl_scope;
 use std::fmt::Display;
 
-impl_scope! {
+impl_tools::impl_scope! {
     /// I don't know why this exists
     pub struct NamedThing<T: Display, F> {
         name: T,

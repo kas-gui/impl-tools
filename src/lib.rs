@@ -26,6 +26,10 @@
 //! -   Evaluation of advanced attribute macros, which may use field
 //!     initializers and read/write other impls within the scope
 //!
+//! `singleton!` is a function-like macro used to define and instantiate a
+//! unique (single-use) type. It supports everything supported by `impl_scope!`
+//! plus field initializers and (limited) automatic typing of fields.
+//!
 //! User-extensions to both `#[autoimpl]` and `impl_scope!` are possible, by
 //! writing your own proc-macro crate depending on
 //! [impl-tools-lib](https://crates.io/crates/impl-tools-lib).
@@ -313,6 +317,16 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Generic parameters from the type are included implicitly with the first form.
 /// Additional generic parameters and where clauses are supported (parameters
 /// and bounds are merged).
+///
+/// ## User-defined attributes
+///
+/// The following attributes are matched within `impl_scope!`, regardless of imports:
+///
+/// -   [`macro@impl_default`]: matches `#[impl_default]`
+///
+/// Note: matching these macros within `impl_scope!` does not use path resolution.
+/// Using `#[impl_tools::impl_default]` will resolve the variant of this
+/// macro which *doesn't support* field initializers.
 ///
 /// ## Example
 ///
