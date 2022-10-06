@@ -82,7 +82,7 @@ impl Singleton {
             let mem = match self.style {
                 StructStyle::Regular(_) => {
                     let id = ident
-                        .unwrap_or_else(|| make_ident(format_args!("_field{index}"), field_span));
+                        .unwrap_or_else(|| make_ident(format_args!("_field{}", index), field_span));
                     ident = Some(id.clone());
                     Member::Named(id)
                 }
@@ -93,7 +93,7 @@ impl Singleton {
                 _ => unreachable!(),
             };
             let ty_name = match ident {
-                None => format!("_Field{index}"),
+                None => format!("_Field{}", index),
                 Some(ref id) => {
                     let ident = id.to_string();
                     let mut buf = "_Field".to_string();
