@@ -290,15 +290,25 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Scope supporting `impl Self` and advanced attribute macros
 ///
-/// This macro has three raisons d'être:
-///
-/// -   To support `impl Self` syntax
-/// -   To allow field initializers, as used by [`macro@impl_default`]
-/// -   To allow user-defined attribute macros to read/write other impls within
-///     the `impl_scope`
+/// This macro facilitates definition of a type (struct, enum or union) plus
+/// implementations via `impl Self { .. }` syntax: `Self` is expanded to the
+/// type's name, including generics and bounds (as defined on the type).
 ///
 /// Caveat: `rustfmt` can not yet format contents (see
-/// [rustfmt#5254](https://github.com/rust-lang/rustfmt/issues/5254)).
+/// [rustfmt#5254](https://github.com/rust-lang/rustfmt/issues/5254),
+/// [rustfmt#5538](https://github.com/rust-lang/rustfmt/pull/5538)).
+///
+/// ## Special attribute macros
+///
+/// Additionally, `impl_scope!` supports special attribute macros evaluated
+/// within its scope:
+///
+/// -   [`#[impl_default]`](macro@impl_default): implement [`Default`] using
+///     field initializers (which are not legal syntax outside of `impl_scope!`)
+///
+/// Note: matching these macros within `impl_scope!` does not use path
+/// resolution. Using `#[impl_tools::impl_default]` would resolve the variant
+/// of this macro which *doesn't support* field initializers.
 ///
 /// ## Syntax
 ///
@@ -317,16 +327,6 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Generic parameters from the type are included implicitly with the first form.
 /// Additional generic parameters and where clauses are supported (parameters
 /// and bounds are merged).
-///
-/// ## User-defined attributes
-///
-/// The following attributes are matched within `impl_scope!`, regardless of imports:
-///
-/// -   [`macro@impl_default`]: matches `#[impl_default]`
-///
-/// Note: matching these macros within `impl_scope!` does not use path resolution.
-/// Using `#[impl_tools::impl_default]` will resolve the variant of this
-/// macro which *doesn't support* field initializers.
 ///
 /// ## Example
 ///
