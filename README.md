@@ -66,6 +66,28 @@ fn main() {
 }
 ```
 
+#### New-type wrappers
+
+A combination of `Deref` on the new-type and trait-reimplementation on the
+trait allows succinct new-type patterns:
+
+```rust
+use impl_tools::autoimpl;
+
+#[autoimpl(for<T: trait> &T, &mut T)]
+trait Foo {
+    fn success(&self) -> bool;
+}
+
+#[autoimpl(Deref, DerefMut using self.0)]
+struct NewFoo<T: Foo>(T);
+
+// NewFoo now supports `Deref<Target = T>` and `&T` supports `Foo`.
+// Effectively, `NewFoo` supports `Foo`.
+// Works for FooRef<'a>(&'a dyn Foo) too; see tests/newtype.rs
+```
+
+
 ### Impl Default
 
 `#[impl_default]` implements `std::default::Default`:
