@@ -30,17 +30,16 @@ Unlike [alternatives](#alternatives), `#[autoimpl]` has minimal and intuitive sy
 use impl_tools::autoimpl;
 use std::fmt::Debug;
 
-#[autoimpl(for<'a, T: trait + ?Sized> Box<T>)]
-// Generates: impl<'a, T: Animal + ?Sized> Animal for Box<T> { .. }
+// Impl Animal for Box<T> where T: Animal + ?Sized
+#[autoimpl(for<T: trait + ?Sized> Box<T>)]
 trait Animal {
     fn number_of_legs(&self) -> u32;
 }
 
+// Impl Debug for Named<T, A: Animal> omitting field animal from output
 #[autoimpl(Debug ignore self.animal where T: Debug)]
-// Generates: impl<T, A: Animal> std::fmt::Debug for Named<A> where T: Debug { .. }
+// Impl Deref and DerefMut to field animal for Named<T, A: Animal>
 #[autoimpl(Deref, DerefMut using self.animal)]
-// Generates: impl<T, A: Animal> std::ops::Deref for Named<A> { .. }
-// Generates: impl<T, A: Animal> std::ops::DerefMut for Named<A> { .. }
 struct Named<T, A: Animal> {
     name: T,
     animal: A,
@@ -65,6 +64,47 @@ fn main() {
     );
 }
 ```
+
+#### New-type wrappers
+
+A combination of `Deref` on the new-type and trait-reimplementation on the
+trait allows succinct new-type patterns:
+
+```rust
+use impl_tools::autoimpl;
+use std::sync::Arc;
+
+// Impl Foo for &T, &mut T and Arc<T>
+#[autoimpl(for<T: trait + ?Sized> &T, &mut T, Arc<T>)]
+// Optional: impl Foo for NewFoo (requires NewFoo: Deref<Target = T>)
+#[autoimpl(for<T: trait> NewFoo<T>)]
+pub trait Foo {
+    fn success(&self) -> bool;
+}
+
+// Impl Deref and DerefMut to a Target which itself supports Foo
+#[autoimpl(Deref<Target = T>, DerefMut using self.0)]
+pub struct NewFoo<T: Foo>(T);
+
+// Impl Deref and DerefMut to a Target which itself supports Foo
+#[autoimpl(Deref<Target = dyn Foo>, DerefMut using self.0)]
+pub struct ArcDynFoo(Arc<dyn Foo>);
+
+#[test]
+fn test_foo_newtypes() {
+    struct Success;
+    impl Foo for Success {
+        fn success(&self) -> bool { true }
+    }
+
+    // We can now directly call Foo's methods on the wrapper:
+    assert!(NewFoo(Success).success());
+    assert!(ArcDynFoo(Arc::new(Success)).success());
+}
+```
+
+See [`tests/newtype.rs`](https://github.com/kas-gui/impl-tools/blob/master/tests/newtype.rs) for more variants of this pattern.
+
 
 ### Impl Default
 

@@ -31,6 +31,19 @@ pub use singleton::{Singleton, SingletonField, SingletonScope};
 #[derive(PartialEq, Eq)]
 pub struct SimplePath(&'static [&'static str]);
 
+impl std::fmt::Display for SimplePath {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        if !self.0.is_empty() {
+            write!(f, "{}", self.0[0])?;
+            for component in &self.0[1..] {
+                write!(f, "::{}", component)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
 impl SimplePath {
     /// Construct, verifying validity
     ///
