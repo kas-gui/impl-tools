@@ -49,7 +49,7 @@ pub trait ImplTrait {
     fn path(&self) -> SimplePath;
 
     /// True if this target supports path arguments
-    fn support_path_args(&self) -> bool {
+    fn support_path_arguments(&self) -> bool {
         false
     }
 
@@ -141,7 +141,7 @@ pub enum Error {
     /// Emit an error with the given `span` and `message`
     WithSpan(Span, &'static str),
     /// Emit an error regarding path arguments
-    PathArgs(&'static str),
+    PathArguments(&'static str),
 }
 
 /// Result type
@@ -220,7 +220,7 @@ mod parsing {
             }
 
             let args = ImplArgs {
-                path_args: PathArguments::None,
+                path_arguments: PathArguments::None,
                 ignores,
                 using,
                 clause,
@@ -283,7 +283,7 @@ impl ImplTraits {
             if !target_impl.support_using() {
                 not_supporting_using.push(target.clone());
             }
-            if !(path_args.is_empty() || target_impl.support_path_args()) {
+            if !(path_args.is_empty() || target_impl.support_path_arguments()) {
                 emit_error!(
                     target_span,
                     "target {} does not support path arguments",
@@ -344,7 +344,7 @@ impl ImplTraits {
 
         for (span, target, path_args) in impl_targets.drain(..) {
             let path_args_span = path_args.span();
-            args.path_args = path_args;
+            args.path_arguments = path_args;
             match target.struct_impl(&item, &args) {
                 Ok(items) => toks.append_all(items),
                 Err(error) => match error {
@@ -353,7 +353,7 @@ impl ImplTraits {
                     }
                     Error::CallSite(msg) => emit_error!(span, msg),
                     Error::WithSpan(span, msg) => emit_error!(span, msg),
-                    Error::PathArgs(msg) => emit_error!(path_args_span, msg),
+                    Error::PathArguments(msg) => emit_error!(path_args_span, msg),
                 },
             }
         }
@@ -367,7 +367,7 @@ pub struct ImplArgs {
     ///
     /// Example: if the target is `Deref<Target = T>`, this is `<Target = T>`.
     /// This is always empty unless [`ImplTrait::support_path_args`] returns true.
-    pub path_args: PathArguments,
+    pub path_arguments: PathArguments,
     /// Fields ignored in attribute
     pub ignores: Vec<Member>,
     /// Field specified to 'use' in attribute

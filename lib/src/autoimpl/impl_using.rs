@@ -126,7 +126,7 @@ impl ImplTrait for ImplDeref {
         SimplePath::new(&["", "core", "ops", "Deref"])
     }
 
-    fn support_path_args(&self) -> bool {
+    fn support_path_arguments(&self) -> bool {
         true
     }
 
@@ -136,7 +136,7 @@ impl ImplTrait for ImplDeref {
 
     fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
         if let Some(field) = args.using_field(&item.fields) {
-            let target = match args.path_args {
+            let target = match args.path_arguments {
                 PathArguments::None => field.ty.clone(),
                 PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments {
                     ref args,
@@ -150,14 +150,14 @@ impl ImplTrait for ImplDeref {
                                 continue;
                             }
                         }
-                        return Err(Error::PathArgs("expected `<Target = ..>`"));
+                        return Err(Error::PathArguments("expected `<Target = ..>`"));
                     }
                     match result {
                         Some(r) => r,
-                        None => return Err(Error::PathArgs("expected `<Target = ..>`")),
+                        None => return Err(Error::PathArguments("expected `<Target = ..>`")),
                     }
                 }
-                PathArguments::Parenthesized(_) => return Err(Error::PathArgs("unexpected")),
+                PathArguments::Parenthesized(_) => return Err(Error::PathArguments("unexpected")),
             };
 
             let member = args.using_member().unwrap();
