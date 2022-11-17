@@ -12,7 +12,9 @@ use proc_macro_error::emit_error;
 use quote::{quote, TokenStreamExt};
 use syn::spanned::Spanned;
 use syn::token::Comma;
-use syn::{parse2, Field, Fields, Ident, Index, Item, ItemStruct, Member, Path, Token};
+use syn::{
+    parse2, Field, Fields, Ident, Index, Item, ItemStruct, Member, Path, PathArguments, Token,
+};
 
 mod impl_misc;
 mod impl_using;
@@ -45,6 +47,11 @@ pub trait ImplTrait {
     ///
     /// This path is matched against trait names in `#[autoimpl]` parameters.
     fn path(&self) -> SimplePath;
+
+    /// True if this target supports path arguments
+    fn support_path_args(&self) -> bool {
+        false
+    }
 
     /// True if this target supports ignoring fields
     ///
@@ -133,6 +140,8 @@ pub enum Error {
     CallSite(&'static str),
     /// Emit an error with the given `span` and `message`
     WithSpan(Span, &'static str),
+    /// Emit an error regarding path arguments
+    PathArgs(&'static str),
 }
 
 /// Result type
@@ -211,6 +220,7 @@ mod parsing {
             }
 
             let args = ImplArgs {
+                path_args: PathArguments::None,
                 ignores,
                 using,
                 clause,
@@ -226,10 +236,15 @@ impl ImplTraits {
     /// This attribute does not modify the item.
     /// The caller should append the result to `item` tokens.
     pub fn expand(
-        mut self,
+        self,
         item: Toks,
         find_impl: impl Fn(&Path) -> Option<&'static dyn ImplTrait>,
     ) -> Toks {
+        let ImplTraits {
+            mut targets,
+            mut args,
+        } = self;
+
         let item = match parse2::<Item>(item) {
             Ok(Item::Struct(item)) => item,
             Ok(item) => {
@@ -245,8 +260,14 @@ impl ImplTraits {
         let mut not_supporting_ignore = vec![];
         let mut not_supporting_using = vec![];
 
-        let mut impl_targets: Vec<(Span, _)> = Vec::with_capacity(self.targets.len());
-        for target in self.targets.drain(..) {
+        let mut impl_targets: Vec<(Span, _, _)> = Vec::with_capacity(targets.len());
+        for mut target in targets.drain(..) {
+            let target_span = target.span();
+            let path_args = target
+                .segments
+                .last_mut()
+                .map(|seg| std::mem::take(&mut seg.arguments))
+                .unwrap_or(PathArguments::None);
             let target_impl = match find_impl(&target) {
                 Some(impl_) => impl_,
                 None => {
@@ -262,16 +283,23 @@ impl ImplTraits {
             if !target_impl.support_using() {
                 not_supporting_using.push(target.clone());
             }
+            if !(path_args.is_empty() || target_impl.support_path_args()) {
+                emit_error!(
+                    target_span,
+                    "target {} does not support path arguments",
+                    target_impl.path()
+                );
+            }
 
-            impl_targets.push((target.span(), target_impl));
+            impl_targets.push((target.span(), target_impl, path_args));
         }
 
-        if !self.args.ignores.is_empty() {
+        if !args.ignores.is_empty() {
             for (target, except_with) in not_supporting_ignore.into_iter() {
                 if let Some(path) = except_with {
                     if impl_targets
                         .iter()
-                        .any(|(_span, target_impl)| path == target_impl.path())
+                        .any(|(_, target_impl, _)| path == target_impl.path())
                     {
                         continue;
                     }
@@ -279,9 +307,9 @@ impl ImplTraits {
                 emit_error!(target, "target does not support `ignore`",);
             }
         }
-        if self.args.using.is_some() {
+        if args.using.is_some() {
             for target in not_supporting_using.into_iter() {
-                emit_error!(target, "`target does not support `using`",);
+                emit_error!(target, "target does not support `using`",);
             }
         }
 
@@ -307,15 +335,17 @@ impl ImplTraits {
         }
 
         let mut toks = Toks::new();
-        for mem in &self.args.ignores {
+        for mem in &args.ignores {
             check_is_field(mem, &item.fields);
         }
-        if let Some(mem) = self.args.using_member() {
+        if let Some(mem) = args.using_member() {
             check_is_field(mem, &item.fields);
         }
 
-        for (span, target) in impl_targets.drain(..) {
-            match target.struct_impl(&item, &self.args) {
+        for (span, target, path_args) in impl_targets.drain(..) {
+            let path_args_span = path_args.span();
+            args.path_args = path_args;
+            match target.struct_impl(&item, &args) {
                 Ok(items) => toks.append_all(items),
                 Err(error) => match error {
                     Error::RequireUsing => {
@@ -323,6 +353,7 @@ impl ImplTraits {
                     }
                     Error::CallSite(msg) => emit_error!(span, msg),
                     Error::WithSpan(span, msg) => emit_error!(span, msg),
+                    Error::PathArgs(msg) => emit_error!(path_args_span, msg),
                 },
             }
         }
@@ -332,6 +363,11 @@ impl ImplTraits {
 
 /// Arguments passed to [`ImplTrait`] implementation methods
 pub struct ImplArgs {
+    /// Path arguments to trait
+    ///
+    /// Example: if the target is `Deref<Target = T>`, this is `<Target = T>`.
+    /// This is always empty unless [`ImplTrait::support_path_args`] returns true.
+    pub path_args: PathArguments,
     /// Fields ignored in attribute
     pub ignores: Vec<Member>,
     /// Field specified to 'use' in attribute

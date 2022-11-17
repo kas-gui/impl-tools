@@ -1,78 +1,94 @@
 //! Test implementing traits over newtype wrappers
 
-use impl_tools::autoimpl;
 use std::rc::Rc;
 use std::sync::Arc;
 
-#[autoimpl(for<T: trait> &T, &mut T, Box<T>)]
-trait Foo {
-    fn success(&self) -> bool;
+mod inner {
+    use super::*;
+    use impl_tools::autoimpl;
+
+    #[autoimpl(for<T: trait + ?Sized> &T, &mut T, Box<T>, Rc<T>, Arc<T>)]
+    pub trait Foo {
+        fn is_true(&self) -> bool;
+    }
+
+    #[autoimpl(Deref<Target = T>, DerefMut using self.0)]
+    pub struct NewFoo<T: Foo>(T);
+    impl<T: Foo> NewFoo<T> {
+        pub fn new(foo: T) -> Self {
+            NewFoo(foo)
+        }
+    }
+
+    #[autoimpl(Deref<Target = dyn Foo + 'a> using self.0)]
+    pub struct FooRef<'a>(&'a dyn Foo);
+    impl<'a> FooRef<'a> {
+        pub fn new(foo: &'a dyn Foo) -> Self {
+            FooRef(foo)
+        }
+    }
+
+    #[autoimpl(Deref<Target = dyn Foo + 'a>, DerefMut using self.0)]
+    pub struct FooRefMut<'a>(&'a mut dyn Foo);
+    impl<'a> FooRefMut<'a> {
+        pub fn new(foo: &'a mut dyn Foo) -> Self {
+            FooRefMut(foo)
+        }
+    }
+
+    #[autoimpl(Deref<Target = T>, DerefMut using self.0)]
+    pub struct BoxFoo<T: Foo>(Box<T>);
+    impl<T: Foo> BoxFoo<T> {
+        pub fn new(foo: Box<T>) -> Self {
+            BoxFoo(foo)
+        }
+    }
+
+    #[autoimpl(Deref<Target = dyn Foo>, DerefMut using self.0)]
+    pub struct BoxDynFoo(Box<dyn Foo>);
+    impl BoxDynFoo {
+        pub fn new(foo: Box<dyn Foo>) -> Self {
+            BoxDynFoo(foo)
+        }
+    }
+
+    #[autoimpl(Deref<Target = dyn Foo>, DerefMut using self.0)]
+    pub struct RcDynFoo(Rc<dyn Foo>);
+    impl RcDynFoo {
+        pub fn new(foo: Rc<dyn Foo>) -> Self {
+            RcDynFoo(foo)
+        }
+    }
+
+    #[autoimpl(Deref<Target = dyn Foo>, DerefMut using self.0)]
+    pub struct ArcDynFoo(Arc<dyn Foo>);
+    impl ArcDynFoo {
+        pub fn new(foo: Arc<dyn Foo>) -> Self {
+            ArcDynFoo(foo)
+        }
+    }
 }
 
-struct S;
-impl Foo for S {
-    fn success(&self) -> bool {
-        true
+#[derive(Clone, Copy, Default)]
+pub struct V(bool);
+impl inner::Foo for V {
+    fn is_true(&self) -> bool {
+        self.0
     }
 }
 
 #[test]
-fn direct() {
-    assert!(S.success());
-}
+fn newtype() {
+    use inner::*;
 
-#[test]
-fn new_foo() {
-    #[autoimpl(Deref, DerefMut using self.0)]
-    struct NewType<T: Foo>(T);
+    let mut v = V(true);
 
-    assert!(NewType(S).success());
-}
-
-#[test]
-fn new_foo_ref() {
-    #[autoimpl(Deref, DerefMut using self.0)]
-    struct NewType<'a>(&'a dyn Foo);
-
-    assert!(NewType(&S).success());
-}
-
-#[test]
-fn new_foo_ref_mut() {
-    #[autoimpl(Deref, DerefMut using self.0)]
-    struct NewType<'a>(&'a mut dyn Foo);
-
-    assert!(NewType(&mut S).success());
-}
-
-#[test]
-fn new_foo_box() {
-    #[autoimpl(Deref, DerefMut using self.0)]
-    struct NewType<T: Foo>(Box<T>);
-
-    assert!(NewType(Box::new(S)).success());
-}
-
-#[test]
-fn new_foo_box_dyn() {
-    #[autoimpl(Deref, DerefMut using self.0)]
-    struct NewType(Box<dyn Foo>);
-
-    assert!(NewType(Box::new(S)).success());
-}
-
-#[test]
-fn new_foo_rc_dyn() {
-    #[autoimpl(Deref, DerefMut using self.0)]
-    struct NewType(Rc<dyn Foo>);
-
-    assert!(NewType(Rc::new(S)).success());
-}
-
-#[test]
-fn new_foo_arc_dyn() {
-    #[autoimpl(Deref, DerefMut using self.0)]
-    struct NewType(Arc<dyn Foo + Send + Sync>);
-
-    assert!(NewType(Arc::new(S)).success());
+    assert!(v.is_true());
+    assert!(NewFoo::new(v).is_true());
+    assert!(FooRef::new(&v).is_true());
+    assert!(FooRefMut::new(&mut v).is_true());
+    assert!(BoxFoo::new(Box::new(v)).is_true());
+    assert!(BoxDynFoo::new(Box::new(v)).is_true());
+    assert!(RcDynFoo::new(Rc::new(v)).is_true());
+    assert!(ArcDynFoo::new(Arc::new(v)).is_true());
 }

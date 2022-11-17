@@ -9,7 +9,7 @@ use super::{Error, ImplArgs, ImplTrait, Result};
 use crate::SimplePath;
 use proc_macro2::TokenStream as Toks;
 use quote::quote;
-use syn::ItemStruct;
+use syn::{ItemStruct, PathArguments};
 
 /// Implement [`core::borrow::Borrow`]
 pub struct ImplBorrow;
@@ -126,16 +126,43 @@ impl ImplTrait for ImplDeref {
         SimplePath::new(&["", "core", "ops", "Deref"])
     }
 
+    fn support_path_args(&self) -> bool {
+        true
+    }
+
     fn support_using(&self) -> bool {
         true
     }
 
     fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
         if let Some(field) = args.using_field(&item.fields) {
-            let ty = field.ty.clone();
+            let target = match args.path_args {
+                PathArguments::None => field.ty.clone(),
+                PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments {
+                    ref args,
+                    ..
+                }) => {
+                    let mut result = None;
+                    for arg in args {
+                        if let syn::GenericArgument::Binding(b) = arg {
+                            if b.ident == "Target" && result.is_none() {
+                                result = Some(b.ty.clone());
+                                continue;
+                            }
+                        }
+                        return Err(Error::PathArgs("expected `<Target = ..>`"));
+                    }
+                    match result {
+                        Some(r) => r,
+                        None => return Err(Error::PathArgs("expected `<Target = ..>`")),
+                    }
+                }
+                PathArguments::Parenthesized(_) => return Err(Error::PathArgs("unexpected")),
+            };
+
             let member = args.using_member().unwrap();
             let method = quote! {
-                type Target = #ty;
+                type Target = #target;
                 fn deref(&self) -> &Self::Target {
                     &self.#member
                 }
