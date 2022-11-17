@@ -8,6 +8,8 @@ mod inner {
     use impl_tools::autoimpl;
 
     #[autoimpl(for<T: trait + ?Sized> &T, &mut T, Box<T>, Rc<T>, Arc<T>)]
+    // Optionally, we can also implement Foo directly for these types:
+    // #[autoimpl(for<T: trait> NewFoo<T>, BoxFoo<T>)]
     pub trait Foo {
         fn is_true(&self) -> bool;
     }
