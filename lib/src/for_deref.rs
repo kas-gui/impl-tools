@@ -143,9 +143,9 @@ impl ForDeref {
     /// Expand over the given `item`
     ///
     /// This attribute does not modify the item.
-    /// The caller should append the result to `item` impl_items.
+    /// The caller should append the result to `item` tokens.
     pub fn expand(self, item: TokenStream) -> TokenStream {
-        let item = match syn::parse2::<Item>(item) {
+        let trait_def = match syn::parse2::<Item>(item) {
             Ok(Item::Trait(item)) => item,
             Ok(item) => {
                 emit_error!(item, "expected trait");
@@ -157,20 +157,21 @@ impl ForDeref {
             }
         };
 
-        let trait_ident = &item.ident;
-        let (_, ty_generics, _) = item.generics.split_for_impl();
-        let trait_ty = quote! { #trait_ident #ty_generics };
-        let (impl_generics, where_clause) = self.generics.impl_generics(&item.generics, &trait_ty);
+        let trait_ident = &trait_def.ident;
+        let (_, trait_generics, _) = trait_def.generics.split_for_impl();
+        let trait_ty = quote! { #trait_ident #trait_generics };
+        let (impl_generics, where_clause) =
+            self.generics.impl_generics(&trait_def.generics, &trait_ty);
 
-        let definitive = self.definitive;
-        let definitive = quote! { < #definitive as #trait_ty > };
+        let definitive_ty = self.definitive;
+        let definitive = quote! { < #definitive_ty as #trait_ty > };
 
         let mut toks = TokenStream::new();
         for target in self.targets {
             // Tokenize, like ToTokens impls for syn::TraitItem*, but for definition
             let mut impl_items = TokenStream::new();
             let tokens = &mut impl_items;
-            for item in &item.items {
+            for item in &trait_def.items {
                 match item {
                     TraitItem::Const(item) => {
                         item.const_token.to_tokens(tokens);
