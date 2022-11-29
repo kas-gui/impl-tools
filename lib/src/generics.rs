@@ -550,6 +550,89 @@ impl Generics {
         );
         (impl_generics, where_clause)
     }
+    /// Generate `ty_generics` tokens
+    ///
+    /// Combines generics from `self` and `item_generics`.
+    ///
+    /// This is the equivalent to the second item output by
+    /// [`syn::Generics::split_for_impl`].
+    pub fn ty_generics(&self, item_generics: &syn::Generics) -> TokenStream {
+        let mut toks = TokenStream::new();
+        let tokens = &mut toks;
+
+        if self.params.is_empty() {
+            let (_, ty_generics, _) = item_generics.split_for_impl();
+            ty_generics.to_tokens(tokens);
+            return toks;
+        }
+
+        self.lt_token.unwrap_or_default().to_tokens(tokens);
+
+        // Print lifetimes before types and consts (see syn impl)
+        for (def, punct) in self
+            .params
+            .pairs()
+            .filter_map(|param| {
+                if let GenericParam::Lifetime(def) = *param.value() {
+                    Some((def, param.punct().map(|p| **p).unwrap_or_default()))
+                } else {
+                    None
+                }
+            })
+            .chain(item_generics.params.pairs().filter_map(|param| {
+                if let syn::GenericParam::Lifetime(def) = *param.value() {
+                    Some((def, param.punct().map(|p| **p).unwrap_or_default()))
+                } else {
+                    None
+                }
+            }))
+        {
+            // Leave off the lifetime bounds and attributes
+            def.lifetime.to_tokens(tokens);
+            punct.to_tokens(tokens);
+        }
+
+        for param in self.params.pairs() {
+            match *param.value() {
+                GenericParam::Lifetime(_) => continue,
+                GenericParam::Type(param) => {
+                    // Leave off the type parameter defaults
+                    param.ident.to_tokens(tokens);
+                }
+                GenericParam::Const(param) => {
+                    // Leave off the const parameter defaults
+                    param.ident.to_tokens(tokens);
+                }
+            }
+            param
+                .punct()
+                .map(|p| **p)
+                .unwrap_or_default()
+                .to_tokens(tokens);
+        }
+        for param in item_generics.params.pairs() {
+            match *param.value() {
+                syn::GenericParam::Lifetime(_) => continue,
+                syn::GenericParam::Type(param) => {
+                    // Leave off the type parameter defaults
+                    param.ident.to_tokens(tokens);
+                }
+                syn::GenericParam::Const(param) => {
+                    // Leave off the const parameter defaults
+                    param.ident.to_tokens(tokens);
+                }
+            }
+            param
+                .punct()
+                .map(|p| **p)
+                .unwrap_or_default()
+                .to_tokens(tokens);
+        }
+
+        self.gt_token.unwrap_or_default().to_tokens(tokens);
+
+        toks
+    }
 }
 
 /// Generate a `where_clause`
