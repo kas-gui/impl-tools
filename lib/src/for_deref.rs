@@ -166,92 +166,92 @@ impl ForDeref {
         let definitive_ty = self.definitive;
         let definitive = quote! { < #definitive_ty as #trait_ty > };
 
-        let mut toks = TokenStream::new();
-        for target in self.targets {
-            // Tokenize, like ToTokens impls for syn::TraitItem*, but for definition
-            let mut impl_items = TokenStream::new();
-            let tokens = &mut impl_items;
-            for item in &trait_def.items {
-                match item {
-                    TraitItem::Const(item) => {
-                        item.const_token.to_tokens(tokens);
-                        item.ident.to_tokens(tokens);
-                        item.colon_token.to_tokens(tokens);
-                        item.ty.to_tokens(tokens);
+        // Tokenize, like ToTokens impls for syn::TraitItem*, but for definition
+        let mut impl_items = TokenStream::new();
+        let tokens = &mut impl_items;
+        for item in &trait_def.items {
+            match item {
+                TraitItem::Const(item) => {
+                    item.const_token.to_tokens(tokens);
+                    item.ident.to_tokens(tokens);
+                    item.colon_token.to_tokens(tokens);
+                    item.ty.to_tokens(tokens);
 
-                        Eq::default().to_tokens(tokens);
-                        definitive.to_tokens(tokens);
-                        Colon2::default().to_tokens(tokens);
-                        item.ident.to_tokens(tokens);
+                    Eq::default().to_tokens(tokens);
+                    definitive.to_tokens(tokens);
+                    Colon2::default().to_tokens(tokens);
+                    item.ident.to_tokens(tokens);
 
-                        item.semi_token.to_tokens(tokens);
-                    }
-                    TraitItem::Method(item) => {
-                        if has_bound_on_self(&item.sig.generics) {
-                            // If the method has a bound on Self, we cannot use a dereferencing
-                            // implementation since the definitive type is not guaranteed to match
-                            // the bound (we also cannot add a bound).
+                    item.semi_token.to_tokens(tokens);
+                }
+                TraitItem::Method(item) => {
+                    if has_bound_on_self(&item.sig.generics) {
+                        // If the method has a bound on Self, we cannot use a dereferencing
+                        // implementation since the definitive type is not guaranteed to match
+                        // the bound (we also cannot add a bound).
 
-                            if item.default.is_none() {
-                                emit_call_site_error!(
-                                    "unable to write automatic trait implementations";
-                                    note = item.span() => "this method has a bound on Self and no default implementation";
-                                );
-                            }
-
-                            continue;
-                        }
-
-                        item.sig.to_tokens(tokens);
-
-                        let ident = &item.sig.ident;
-                        let params = item.sig.inputs.iter().map(|arg| match arg {
-                            FnArg::Receiver(arg) => &arg.self_token as &dyn ToTokens,
-                            FnArg::Typed(arg) => &arg.pat,
-                        });
-                        tokens.append_all(quote! { {
-                            #definitive :: #ident ( #(#params),* )
-                        } });
-                    }
-                    TraitItem::Type(item) => {
-                        if has_bound_on_self(&item.generics) {
+                        if item.default.is_none() {
                             emit_call_site_error!(
-                                "unable to write automatic trait implementations";
-                                note = item.span() => "this type has a bound on Self";
+                                "cannot autoimpl trait with Deref";
+                                note = item.span() => "method has a bound on Self and no default implementation";
                             );
                         }
 
-                        item.type_token.to_tokens(tokens);
-                        item.ident.to_tokens(tokens);
-
-                        let (_, ty_generics, where_clause) = item.generics.split_for_impl();
-                        ty_generics.to_tokens(tokens);
-
-                        Eq::default().to_tokens(tokens);
-                        definitive.to_tokens(tokens);
-                        Colon2::default().to_tokens(tokens);
-                        item.ident.to_tokens(tokens);
-                        ty_generics.to_tokens(tokens);
-
-                        where_clause.to_tokens(tokens);
-                        item.semi_token.to_tokens(tokens);
-                    }
-                    TraitItem::Macro(item) => {
-                        emit_error!(item, "unsupported: macro item in trait");
-                    }
-                    TraitItem::Verbatim(item) => {
-                        emit_error!(item, "unsupported: verbatim item in trait");
+                        continue;
                     }
 
-                    /* Testing of exhaustive matching is disabled: syn 1.0.90 breaks it.
-                    #[cfg(test)]
-                    TraitItem::__TestExhaustive(_) => unimplemented!(),
-                    #[cfg(not(test))]
-                    */
-                    _ => (),
+                    item.sig.to_tokens(tokens);
+
+                    let ident = &item.sig.ident;
+                    let params = item.sig.inputs.iter().map(|arg| match arg {
+                        FnArg::Receiver(arg) => &arg.self_token as &dyn ToTokens,
+                        FnArg::Typed(arg) => &arg.pat,
+                    });
+                    tokens.append_all(quote! { {
+                        #definitive :: #ident ( #(#params),* )
+                    } });
                 }
-            }
+                TraitItem::Type(item) => {
+                    if has_bound_on_self(&item.generics) {
+                        emit_call_site_error!(
+                            "cannot autoimpl trait with Deref";
+                            note = item.span() => "type has a bound on Self";
+                        );
+                    }
 
+                    item.type_token.to_tokens(tokens);
+                    item.ident.to_tokens(tokens);
+
+                    let (_, ty_generics, where_clause) = item.generics.split_for_impl();
+                    ty_generics.to_tokens(tokens);
+
+                    Eq::default().to_tokens(tokens);
+                    definitive.to_tokens(tokens);
+                    Colon2::default().to_tokens(tokens);
+                    item.ident.to_tokens(tokens);
+                    ty_generics.to_tokens(tokens);
+
+                    where_clause.to_tokens(tokens);
+                    item.semi_token.to_tokens(tokens);
+                }
+                TraitItem::Macro(item) => {
+                    emit_error!(item, "unsupported: macro item in trait");
+                }
+                TraitItem::Verbatim(item) => {
+                    emit_error!(item, "unsupported: verbatim item in trait");
+                }
+
+                /* Testing of exhaustive matching is disabled: syn 1.0.90 breaks it.
+                #[cfg(test)]
+                TraitItem::__TestExhaustive(_) => unimplemented!(),
+                #[cfg(not(test))]
+                */
+                _ => (),
+            }
+        }
+
+        let mut toks = TokenStream::new();
+        for target in self.targets {
             toks.append_all(quote! {
                 #[automatically_derived]
                 impl #impl_generics #trait_ty for #target #where_clause {
