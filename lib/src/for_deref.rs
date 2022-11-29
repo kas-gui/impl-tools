@@ -168,6 +168,7 @@ impl ForDeref {
         let trait_ident = &trait_def.ident;
         let (_, trait_generics, _) = trait_def.generics.split_for_impl();
         let trait_ty = quote! { #trait_ident #trait_generics };
+        let ty_generics = self.generics.ty_generics(&trait_def.generics);
         let (impl_generics, where_clause) =
             self.generics.impl_generics(&trait_def.generics, &trait_ty);
 
@@ -283,7 +284,28 @@ impl ForDeref {
         match bound {
             Bound::None => (),
             Bound::Deref(is_mut) => {
-                // TODO
+                // Emit a bound to improve error messages (see issue 27)
+                let bound = match is_mut {
+                    false => quote! { ::core::ops::Deref },
+                    true => quote! { ::core::ops::DerefMut },
+                };
+
+                let target_impls = self.targets.iter().map(|target| {
+                    quote! {
+                        impl #impl_generics TargetImplsDeref #ty_generics for #target
+                        #where_clause {}
+                    }
+                });
+
+                toks.append_all(quote! {
+                    #[automatically_derived]
+                    const _: () = {
+                        trait TargetImplsDeref #impl_generics: #bound<Target = #definitive_ty>
+                        #where_clause {}
+
+                        #(#target_impls)*
+                    };
+                });
             }
             Bound::ErrorEmitted => return toks,
         }
