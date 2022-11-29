@@ -5,7 +5,7 @@
 
 //! Implementation of the `#[autoimpl]` attribute
 
-use crate::generics::{impl_generics, GenericParam, Generics, TypeParamBound, WherePredicate};
+use crate::generics::{GenericParam, Generics, TypeParamBound, WherePredicate};
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::{emit_call_site_error, emit_error};
 use quote::{quote, ToTokens, TokenStreamExt};
@@ -160,7 +160,7 @@ impl ForDeref {
         let trait_ident = &item.ident;
         let (_, ty_generics, _) = item.generics.split_for_impl();
         let trait_ty = quote! { #trait_ident #ty_generics };
-        let (impl_generics, where_clause) = impl_generics(self.generics, &item.generics, &trait_ty);
+        let (impl_generics, where_clause) = self.generics.impl_generics(&item.generics, &trait_ty);
 
         let definitive = self.definitive;
         let definitive = quote! { < #definitive as #trait_ty > };
