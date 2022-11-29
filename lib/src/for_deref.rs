@@ -13,7 +13,7 @@ use std::{iter, slice};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Colon2, Comma, Eq};
-use syn::{Attribute, FnArg, Ident, Item, Token, TraitItem, Type, TypePath};
+use syn::{parse_quote, Attribute, FnArg, Ident, Item, Token, TraitItem, Type, TypePath};
 
 /// Autoimpl for types supporting `Deref`
 pub struct ForDeref {
@@ -157,6 +157,14 @@ impl ForDeref {
             }
         };
 
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+        enum Bound {
+            None,
+            Deref(bool), // true if DerefMut
+            ErrorEmitted,
+        }
+        let mut bound = Bound::None;
+
         let trait_ident = &trait_def.ident;
         let (_, trait_generics, _) = trait_def.generics.split_for_impl();
         let trait_ty = quote! { #trait_ident #trait_generics };
@@ -201,6 +209,27 @@ impl ForDeref {
                     }
 
                     item.sig.to_tokens(tokens);
+
+                    bound = bound.max(match item.sig.inputs.first() {
+                        Some(FnArg::Receiver(rec)) => {
+                            if rec.reference.is_some() {
+                                Bound::Deref(rec.mutability.is_some())
+                            } else {
+                                emit_call_site_error!(
+                                    "cannot autoimpl trait with Deref";
+                                    note = rec.span() => "deref cannot yield `self` by value";
+                                );
+                                Bound::ErrorEmitted
+                            }
+                        }
+                        Some(FnArg::Typed(ref pat)) => match &*pat.ty {
+                            Type::Reference(rf) if rf.elem == parse_quote! { Self } => {
+                                Bound::Deref(rf.mutability.is_some())
+                            }
+                            _ => Bound::None,
+                        },
+                        _ => Bound::None,
+                    });
 
                     let ident = &item.sig.ident;
                     let params = item.sig.inputs.iter().map(|arg| match arg {
@@ -251,6 +280,14 @@ impl ForDeref {
         }
 
         let mut toks = TokenStream::new();
+        match bound {
+            Bound::None => (),
+            Bound::Deref(is_mut) => {
+                // TODO
+            }
+            Bound::ErrorEmitted => return toks,
+        }
+
         for target in self.targets {
             toks.append_all(quote! {
                 #[automatically_derived]
