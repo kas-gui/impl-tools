@@ -2,6 +2,18 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1], `impl-tools-lib` [0.7.0] — 2022-12-01
+
+-   Better diagnostics for trait-redefinition: require `Deref` bound (#28)
+-   Document `Deref` with custom `Target` type
+
+`impl-tools-lib` has breaking changes and therefore a higher version number:
+
+-   Replace free function `impl_generics` with method `Generics::impl_generics`
+-   Add method `Generics::ty_generics`
+
+Note: next breaking release for `impl-tools` should bump version to match `-lib`.
+
 ## [0.6.0] — 2022-11-17
 
 -   Add `ImplTrait::support_path_args`, `ImplArgs::path_args` (#26)
