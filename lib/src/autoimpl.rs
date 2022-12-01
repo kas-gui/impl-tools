@@ -366,7 +366,7 @@ pub struct ImplArgs {
     /// Path arguments to trait
     ///
     /// Example: if the target is `Deref<Target = T>`, this is `<Target = T>`.
-    /// This is always empty unless [`ImplTrait::support_path_args`] returns true.
+    /// This is always empty unless [`ImplTrait::support_path_arguments`] returns true.
     pub path_arguments: PathArguments,
     /// Fields ignored in attribute
     pub ignores: Vec<Member>,

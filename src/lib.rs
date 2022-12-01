@@ -139,8 +139,8 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 /// | [`::core::fmt::Debug`] | yes | - | |
 /// | [`::core::hash::Hash`] | yes | - | |
 /// | [`::core::marker::Copy`] | * | - | *allowed with `Clone` |
-/// | [`::core::ops::Deref`] | - | deref target | `type Target` is type of target field |
-/// | [`::core::ops::DerefMut`] | - | deref target | `type Target` is type of target field |
+/// | [`::core::ops::Deref`] | - | deref target | See [`Deref::Target` type](#dereftarget-type) below |
+/// | [`::core::ops::DerefMut`] | - | deref target | |
 ///
 /// Traits are matched from the path, as follows:
 ///
@@ -185,6 +185,27 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 /// A `where` clause, e.g. `where T: Foo`, may be used.
 /// A special bound syntax, `T: trait`, indicates that `T` must support the
 /// trait being implemented.
+///
+/// ### `Deref::Target` type
+///
+/// The [`Deref`] trait has two members:
+///
+/// - `type Target: ?Sized`
+/// - `fn deref(&self) -> &Self::Target`
+///
+/// `#[autoimpl(Deref using self.x)]` implements `Deref` as follows:
+///
+/// - `type Target = X` where field `x` has type `X`
+/// - `fn deref(&self) -> &Self::Target { &self.x }`
+///
+/// For some uses this is fine, but in other cases a different `Target` type is
+/// preferred. To achieve this, `Target` may be given explicitly:
+///
+/// ```
+/// # use impl_tools::autoimpl;
+/// #[autoimpl(Deref<Target = T> using self.0)]
+/// struct MyBoxingWrapper<T: ?Sized>(Box<T>);
+/// ```
 ///
 /// ### Examples
 ///

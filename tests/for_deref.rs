@@ -117,3 +117,30 @@ fn gat() {
     impls_gat(S);
     impls_gat(Box::new(S));
 }
+
+#[test]
+fn custom_deref_target() {
+    #[autoimpl(Deref<Target = T>, DerefMut using self.0)]
+    struct BoxingWrapper<T: ?Sized>(Box<T>);
+
+    #[autoimpl(for<T: trait + ?Sized> BoxingWrapper<T>)]
+    trait Increment {
+        fn increment(&mut self);
+    }
+
+    impl Increment for i32 {
+        fn increment(&mut self) {
+            *self += 1;
+        }
+    }
+
+    let mut x = BoxingWrapper(Box::new(0));
+    x.increment();
+    assert_eq!(*x.0, 1);
+
+    let mut y = 10;
+    y.increment();
+    let mut z = BoxingWrapper(Box::new(&mut y as &mut dyn Increment));
+    z.increment();
+    assert_eq!(y, 12);
+}
