@@ -292,7 +292,7 @@ impl ForDeref {
 
                 let target_impls = self.targets.iter().map(|target| {
                     quote! {
-                        impl #impl_generics TargetImplsDeref #ty_generics for #target
+                        impl #impl_generics TargetMustImplDeref #ty_generics for #target
                         #where_clause {}
                     }
                 });
@@ -300,7 +300,7 @@ impl ForDeref {
                 toks.append_all(quote! {
                     #[automatically_derived]
                     const _: () = {
-                        trait TargetImplsDeref #impl_generics: #bound<Target = #definitive_ty>
+                        trait TargetMustImplDeref #impl_generics: #bound<Target = #definitive_ty>
                         #where_clause {}
 
                         #(#target_impls)*
