@@ -181,6 +181,12 @@ impl ForDeref {
         for item in &trait_def.items {
             match item {
                 TraitItem::Const(item) => {
+                    for attr in item.attrs.iter() {
+                        if attr.path == parse_quote! { cfg } {
+                            attr.to_tokens(tokens);
+                        }
+                    }
+
                     item.const_token.to_tokens(tokens);
                     item.ident.to_tokens(tokens);
                     item.colon_token.to_tokens(tokens);
@@ -194,6 +200,12 @@ impl ForDeref {
                     item.semi_token.to_tokens(tokens);
                 }
                 TraitItem::Method(item) => {
+                    for attr in item.attrs.iter() {
+                        if attr.path == parse_quote! { cfg } {
+                            attr.to_tokens(tokens);
+                        }
+                    }
+
                     if has_bound_on_self(&item.sig.generics) {
                         // If the method has a bound on Self, we cannot use a dereferencing
                         // implementation since the definitive type is not guaranteed to match
@@ -242,6 +254,12 @@ impl ForDeref {
                     } });
                 }
                 TraitItem::Type(item) => {
+                    for attr in item.attrs.iter() {
+                        if attr.path == parse_quote! { cfg } {
+                            attr.to_tokens(tokens);
+                        }
+                    }
+
                     if has_bound_on_self(&item.generics) {
                         emit_call_site_error!(
                             "cannot autoimpl trait with Deref";
