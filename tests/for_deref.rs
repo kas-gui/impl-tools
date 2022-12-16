@@ -144,3 +144,12 @@ fn custom_deref_target() {
     z.increment();
     assert_eq!(y, 12);
 }
+
+#[autoimpl(for<T: trait + ?Sized> &T)]
+trait Cfgs {
+    #[cfg(test)]
+    fn included(&self);
+
+    #[cfg(feature = "never")]
+    fn excluded(&self);
+}
