@@ -481,6 +481,48 @@ impl ImplTrait for ImplHash {
         true
     }
 
+    fn enum_items(&self, item: &ItemEnum, _: &ImplArgs) -> Result<(Toks, Toks)> {
+        let mut idfmt = IdentFormatter::new();
+        let name = &item.ident;
+        let mut variants = Toks::new();
+        for v in item.variants.iter() {
+            let ident = &v.ident;
+            variants.append_all(quote! { #name :: #ident });
+            variants.append_all(match v.fields {
+                Fields::Named(ref fields) => {
+                    let idents = fields.named.iter().map(|f| f.ident.as_ref().unwrap());
+                    let hashes = fields.named.iter().map(|f| {
+                        let ident = f.ident.as_ref().unwrap();
+                        quote! { ::core::hash::Hash::hash(&#ident, state); }
+                    });
+                    quote! { { #(#idents),* } => { #(#hashes);* } }
+                }
+                Fields::Unnamed(ref fields) => {
+                    let len = fields.unnamed.len();
+                    let mut bindings = Vec::with_capacity(len);
+                    let mut hashes = quote! {};
+                    for i in 0..len {
+                        let ident = idfmt.make_call_site(format_args!("_{i}"));
+                        bindings.push(quote! { ref #ident });
+                        hashes.append_all(quote! {
+                            ::core::hash::Hash::hash(&#ident, state);
+                        });
+                    }
+                    quote! { ( #(#bindings),* ) => { #hashes } }
+                }
+                Fields::Unit => quote! { => (), },
+            });
+        }
+        let method = quote! {
+            fn hash<__H: ::core::hash::Hasher>(&self, state: &mut __H) {
+                match *self {
+                    #variants
+                }
+            }
+        };
+        Ok((quote! { ::core::hash::Hash }, method))
+    }
+
     fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
         let mut toks = Toks::new();
         args.for_fields_iter(item.fields.iter().enumerate().rev(), |member: Member, _| {

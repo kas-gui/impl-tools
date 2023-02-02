@@ -11,11 +11,11 @@ fn test_has_clone(_: impl Clone) {}
 fn test_has_copy(_: impl Copy) {}
 
 #[autoimpl(std::clone::Clone, core::fmt::Debug)]
-#[autoimpl(std::cmp::PartialEq, std::cmp::Eq)]
+#[autoimpl(std::cmp::PartialEq, std::cmp::Eq, core::hash::Hash)]
 enum Void {}
 
 #[autoimpl(std::marker::Copy, std::clone::Clone, core::fmt::Debug)]
-#[autoimpl(PartialEq, Eq)]
+#[autoimpl(PartialEq, Eq, Hash)]
 enum Variants {
     A,
     B(()),
