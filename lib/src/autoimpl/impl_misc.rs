@@ -283,6 +283,66 @@ impl ImplTrait for ImplPartialEq {
         true
     }
 
+    fn enum_items(&self, item: &ItemEnum, _: &ImplArgs) -> Result<(Toks, Toks)> {
+        let mut idfmt = IdentFormatter::new();
+        let name = &item.ident;
+        let mut variants = Toks::new();
+        for v in item.variants.iter() {
+            let ident = &v.ident;
+            let tag = quote! { #name :: #ident };
+            variants.append_all(match v.fields {
+                Fields::Named(ref fields) => {
+                    let mut l_args = quote! {};
+                    let mut r_args = quote! {};
+                    let mut cond = quote! {};
+                    for (i, field) in fields.named.iter().enumerate() {
+                        let ident = field.ident.as_ref().unwrap();
+                        let li = idfmt.make_call_site(format_args!("__l{i}"));
+                        let ri = idfmt.make_call_site(format_args!("__r{i}"));
+                        l_args.append_all(quote! { #ident: #li, });
+                        r_args.append_all(quote! { #ident: #ri, });
+                        if !cond.is_empty() {
+                            cond.append_all(quote! { && });
+                        }
+                        cond.append_all(quote! { #li == #ri });
+                    }
+
+                    quote! { (#tag { #l_args }, #tag { #r_args }) => #cond, }
+                }
+                Fields::Unnamed(ref fields) => {
+                    let len = fields.unnamed.len();
+                    let mut l_args = quote! {};
+                    let mut r_args = quote! {};
+                    let mut cond = quote! {};
+                    for i in 0..len {
+                        let li = idfmt.make_call_site(format_args!("__l{i}"));
+                        let ri = idfmt.make_call_site(format_args!("__r{i}"));
+                        l_args.append_all(quote! { #li, });
+                        r_args.append_all(quote! { #ri, });
+                        if !cond.is_empty() {
+                            cond.append_all(quote! { && });
+                        }
+                        cond.append_all(quote! { #li == #ri });
+                    }
+
+                    quote! { (#tag ( #l_args ), #tag ( #r_args )) => #cond, }
+                }
+                Fields::Unit => quote! { (#tag, #tag) => true, },
+            });
+        }
+        variants.append_all(quote! { (_, _) => false, });
+
+        let method = quote! {
+            #[inline]
+            fn eq(&self, other: &Self) -> bool {
+                match (self, other) {
+                    #variants
+                }
+            }
+        };
+        Ok((quote! { ::core::cmp::PartialEq }, method))
+    }
+
     fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
         let mut toks = Toks::new();
         let mut require_sep = false;
@@ -316,6 +376,10 @@ impl ImplTrait for ImplEq {
 
     fn allow_ignore_with(&self) -> Option<SimplePath> {
         Some(SimplePath::new(&["", "core", "cmp", "PartialEq"]))
+    }
+
+    fn enum_items(&self, _: &ItemEnum, _: &ImplArgs) -> Result<(Toks, Toks)> {
+        Ok((quote! { ::core::cmp::Eq }, quote! {}))
     }
 
     fn struct_items(&self, _: &ItemStruct, _: &ImplArgs) -> Result<(Toks, Toks)> {

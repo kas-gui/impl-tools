@@ -11,9 +11,11 @@ fn test_has_clone(_: impl Clone) {}
 fn test_has_copy(_: impl Copy) {}
 
 #[autoimpl(std::clone::Clone, core::fmt::Debug)]
+#[autoimpl(std::cmp::PartialEq, std::cmp::Eq)]
 enum Void {}
 
 #[autoimpl(std::marker::Copy, std::clone::Clone, core::fmt::Debug)]
+#[autoimpl(PartialEq, Eq)]
 enum Variants {
     A,
     B(()),
@@ -43,6 +45,7 @@ fn variants() {
 
 #[autoimpl(Copy, Clone, Debug where T: trait)]
 #[impl_default(MyOption::None)]
+#[autoimpl(PartialEq, Eq where T: trait)]
 enum MyOption<T> {
     None,
     Some(T),
