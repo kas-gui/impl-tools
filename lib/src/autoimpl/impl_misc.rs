@@ -6,10 +6,10 @@
 //! Miscellaneous impls
 
 use super::{ImplArgs, ImplTrait, Result};
-use crate::SimplePath;
-use proc_macro2::{Span, TokenStream as Toks};
+use crate::{IdentFormatter, SimplePath};
+use proc_macro2::TokenStream as Toks;
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{Fields, Ident, Index, ItemEnum, ItemStruct, Member, Token};
+use syn::{Fields, Index, ItemEnum, ItemStruct, Member, Token};
 
 /// Implement [`core::clone::Clone`]
 pub struct ImplClone;
@@ -23,6 +23,7 @@ impl ImplTrait for ImplClone {
     }
 
     fn enum_items(&self, item: &ItemEnum, _: &ImplArgs) -> Result<(Toks, Toks)> {
+        let mut idfmt = IdentFormatter::new();
         let name = &item.ident;
         let mut variants = Toks::new();
         for v in item.variants.iter() {
@@ -42,7 +43,7 @@ impl ImplTrait for ImplClone {
                     let mut bindings = Vec::with_capacity(len);
                     let mut items = Vec::with_capacity(len);
                     for i in 0..len {
-                        let ident = Ident::new(&format!("_{}", i), Span::call_site());
+                        let ident = idfmt.make_call_site(format_args!("_{i}"));
                         bindings.push(quote! { ref #ident });
                         items.push(quote! { #ident.clone() });
                     }
@@ -131,6 +132,7 @@ impl ImplTrait for ImplDebug {
     }
 
     fn enum_items(&self, item: &ItemEnum, _: &ImplArgs) -> Result<(Toks, Toks)> {
+        let mut idfmt = IdentFormatter::new();
         let name = &item.ident;
         let type_name = item.ident.to_string();
         let mut variants = Toks::new();
@@ -156,7 +158,7 @@ impl ImplTrait for ImplDebug {
                     let mut bindings = Vec::with_capacity(len);
                     let mut items = Toks::new();
                     for i in 0..len {
-                        let ident = Ident::new(&format!("_{}", i), Span::call_site());
+                        let ident = idfmt.make_call_site(format_args!("_{i}"));
                         bindings.push(quote! { ref #ident });
                         items.append_all(quote! { .field(#ident) });
                     }

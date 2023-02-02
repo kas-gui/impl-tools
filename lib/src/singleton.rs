@@ -4,10 +4,9 @@
 //     https://www.apache.org/licenses/LICENSE-2.0
 
 use crate::fields::{Field, Fields, FieldsNamed, FieldsUnnamed, StructStyle};
-use crate::{Scope, ScopeItem};
+use crate::{IdentFormatter, Scope, ScopeItem};
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::fmt::Write;
 use syn::token::{Brace, Colon, Comma, Eq, Paren, Semi};
 use syn::{parse_quote, punctuated::Punctuated, spanned::Spanned};
 use syn::{Attribute, GenericParam, Generics, Ident, ItemImpl, Member, Token, Type, TypePath};
@@ -59,13 +58,7 @@ pub struct Singleton {
 impl Singleton {
     /// Convert to a [`SingletonScope`]
     pub fn into_scope(mut self) -> SingletonScope {
-        // Used to make fresh identifiers for generic types
-        let mut name_buf = String::with_capacity(32);
-        let mut make_ident = move |args: std::fmt::Arguments, span| -> Ident {
-            name_buf.clear();
-            name_buf.write_fmt(args).unwrap();
-            Ident::new(&name_buf, span)
-        };
+        let mut idfmt = IdentFormatter::new();
 
         let mut fields = Punctuated::<Field, Comma>::new();
         let mut field_val_toks = quote! {};
@@ -82,7 +75,7 @@ impl Singleton {
             let mem = match self.style {
                 StructStyle::Regular(_) => {
                     let id = ident
-                        .unwrap_or_else(|| make_ident(format_args!("_field{}", index), field_span));
+                        .unwrap_or_else(|| idfmt.make(format_args!("_field{}", index), field_span));
                     ident = Some(id.clone());
                     Member::Named(id)
                 }
@@ -138,22 +131,20 @@ impl Singleton {
                     })
                 }
                 mut ty => {
-                    struct ReplaceInfers<'a, F: FnMut(std::fmt::Arguments, Span) -> Ident> {
+                    struct ReplaceInfers<'a> {
                         index: usize,
                         params: Vec<GenericParam>,
-                        make_ident: &'a mut F,
+                        idfmt: &'a mut IdentFormatter,
                         ty_name: &'a str,
                     }
                     let mut replacer = ReplaceInfers {
                         index: 0,
                         params: vec![],
-                        make_ident: &mut make_ident,
+                        idfmt: &mut idfmt,
                         ty_name: &ty_name,
                     };
 
-                    impl<'a, F: FnMut(std::fmt::Arguments, Span) -> Ident> syn::visit_mut::VisitMut
-                        for ReplaceInfers<'a, F>
-                    {
+                    impl<'a> syn::visit_mut::VisitMut for ReplaceInfers<'a> {
                         fn visit_type_mut(&mut self, node: &mut Type) {
                             let (span, bounds) = match node {
                                 Type::ImplTrait(syn::TypeImplTrait { impl_token, bounds }) => {
@@ -163,10 +154,9 @@ impl Singleton {
                                 _ => return,
                             };
 
-                            let ident = (self.make_ident)(
-                                format_args!("{}{}", self.ty_name, self.index),
-                                span,
-                            );
+                            let ident = self
+                                .idfmt
+                                .make(format_args!("{}{}", self.ty_name, self.index), span);
                             self.index += 1;
 
                             self.params.push(GenericParam::Type(syn::TypeParam {
