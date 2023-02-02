@@ -5,7 +5,7 @@
 extern crate alloc;
 use alloc::format;
 
-use impl_tools::autoimpl;
+use impl_tools::{autoimpl, impl_default};
 
 fn test_has_clone(_: impl Clone) {}
 fn test_has_copy(_: impl Copy) {}
@@ -42,6 +42,7 @@ fn variants() {
 }
 
 #[autoimpl(Copy, Clone, Debug where T: trait)]
+#[impl_default(MyOption::None)]
 enum MyOption<T> {
     None,
     Some(T),
@@ -49,7 +50,7 @@ enum MyOption<T> {
 
 #[test]
 fn my_option() {
-    test_has_clone(MyOption::<i32>::None);
+    test_has_clone(MyOption::<i32>::default());
     test_has_copy(MyOption::Some(1));
     assert_eq!(format!("{:?}", MyOption::Some(1)), "MyOption::Some(1)");
 }

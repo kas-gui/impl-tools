@@ -42,6 +42,13 @@ struct X<A, B: Debug, C> {
     c: PhantomData<C>,
 }
 
+#[autoimpl(Clone where A: trait, B: trait)]
+#[autoimpl(Debug where A: Debug)]
+enum MaybeX<A, B: Debug, C> {
+    None,
+    Some(X<A, B, C>),
+}
+
 #[test]
 fn x() {
     let x = X {
@@ -52,7 +59,11 @@ fn x() {
     let y = x.clone();
     assert_eq!(x.a, y.a);
     assert_eq!(x.b, y.b);
-    assert_eq!(format!("{:?}", x), "X { a: 1, b: \"abc\", .. }");
+    assert_eq!(format!("{x:?}"), "X { a: 1, b: \"abc\", .. }");
+
+    let none = MaybeX::<(), (), ()>::None;
+    assert_eq!(format!("{none:?}"), "MaybeX::None");
+    test_has_clone(MaybeX::Some(x));
 }
 
 #[autoimpl(Deref, DerefMut using self.t)]
