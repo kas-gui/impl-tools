@@ -6,10 +6,10 @@
 //! Miscellaneous impls
 
 use super::{ImplArgs, ImplTrait, Result};
-use crate::SimplePath;
+use crate::{IdentFormatter, SimplePath};
 use proc_macro2::TokenStream as Toks;
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{Fields, Index, ItemStruct, Member, Token};
+use syn::{Fields, Index, ItemEnum, ItemStruct, Member, Token};
 
 /// Implement [`core::clone::Clone`]
 pub struct ImplClone;
@@ -20,6 +20,46 @@ impl ImplTrait for ImplClone {
 
     fn support_ignore(&self) -> bool {
         true
+    }
+
+    fn enum_items(&self, item: &ItemEnum, _: &ImplArgs) -> Result<(Toks, Toks)> {
+        let mut idfmt = IdentFormatter::new();
+        let name = &item.ident;
+        let mut variants = Toks::new();
+        for v in item.variants.iter() {
+            let ident = &v.ident;
+            let tag = quote! { #name :: #ident };
+            variants.append_all(match v.fields {
+                Fields::Named(ref fields) => {
+                    let idents = fields.named.iter().map(|f| f.ident.as_ref().unwrap());
+                    let clones = fields.named.iter().map(|f| {
+                        let ident = f.ident.as_ref().unwrap();
+                        quote! { #ident: #ident.clone() }
+                    });
+                    quote! { #tag { #(#idents),* } => #tag { #(#clones),* }, }
+                }
+                Fields::Unnamed(ref fields) => {
+                    let len = fields.unnamed.len();
+                    let mut bindings = Vec::with_capacity(len);
+                    let mut items = Vec::with_capacity(len);
+                    for i in 0..len {
+                        let ident = idfmt.make_call_site(format_args!("_{i}"));
+                        bindings.push(quote! { ref #ident });
+                        items.push(quote! { #ident.clone() });
+                    }
+                    quote! { #tag ( #(#bindings),* ) => #tag ( #(#items),* ), }
+                }
+                Fields::Unit => quote! { #tag => #tag, },
+            });
+        }
+        let method = quote! {
+            fn clone(&self) -> Self {
+                match *self {
+                    #variants
+                }
+            }
+        };
+        Ok((quote! { ::core::clone::Clone }, method))
     }
 
     fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
@@ -71,6 +111,10 @@ impl ImplTrait for ImplCopy {
         Some(SimplePath::new(&["", "core", "clone", "Clone"]))
     }
 
+    fn enum_items(&self, _: &ItemEnum, _: &ImplArgs) -> Result<(Toks, Toks)> {
+        Ok((quote! { ::core::marker::Copy }, quote! {}))
+    }
+
     fn struct_items(&self, _: &ItemStruct, _: &ImplArgs) -> Result<(Toks, Toks)> {
         Ok((quote! { ::core::marker::Copy }, quote! {}))
     }
@@ -85,6 +129,57 @@ impl ImplTrait for ImplDebug {
 
     fn support_ignore(&self) -> bool {
         true
+    }
+
+    fn enum_items(&self, item: &ItemEnum, _: &ImplArgs) -> Result<(Toks, Toks)> {
+        let mut idfmt = IdentFormatter::new();
+        let name = &item.ident;
+        let type_name = item.ident.to_string();
+        let mut variants = Toks::new();
+        for v in item.variants.iter() {
+            let ident = &v.ident;
+            let var_name = ident.to_string();
+            let tag = quote! { #name :: #ident };
+            variants.append_all(match v.fields {
+                Fields::Named(ref fields) => {
+                    let idents = fields.named.iter().map(|f| f.ident.as_ref().unwrap());
+                    let mut items = Toks::new();
+                    for field in fields.named.iter() {
+                        let ident = field.ident.as_ref().unwrap();
+                        let name = ident.to_string();
+                        items.append_all(quote! { .field(#name, #ident) });
+                    }
+                    quote! {
+                        #tag { #(ref #idents),* } => f.debug_struct(#var_name) #items .finish(),
+                    }
+                }
+                Fields::Unnamed(ref fields) => {
+                    let len = fields.unnamed.len();
+                    let mut bindings = Vec::with_capacity(len);
+                    let mut items = Toks::new();
+                    for i in 0..len {
+                        let ident = idfmt.make_call_site(format_args!("_{i}"));
+                        bindings.push(quote! { ref #ident });
+                        items.append_all(quote! { .field(#ident) });
+                    }
+                    quote! {
+                        #tag ( #(#bindings),* ) => f.debug_tuple(#var_name) #items .finish(),
+                    }
+                }
+                Fields::Unit => quote! { #tag => f.write_str(#var_name), },
+            })
+        }
+
+        // Note: unlike #[derive(Debug)], we include the name of the enum!
+        let method = quote! {
+            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                write!(f, "{}::", #type_name)?;
+                match *self {
+                    #variants
+                }
+            }
+        };
+        Ok((quote! { ::core::fmt::Debug }, method))
     }
 
     fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
@@ -188,6 +283,66 @@ impl ImplTrait for ImplPartialEq {
         true
     }
 
+    fn enum_items(&self, item: &ItemEnum, _: &ImplArgs) -> Result<(Toks, Toks)> {
+        let mut idfmt = IdentFormatter::new();
+        let name = &item.ident;
+        let mut variants = Toks::new();
+        for v in item.variants.iter() {
+            let ident = &v.ident;
+            let tag = quote! { #name :: #ident };
+            variants.append_all(match v.fields {
+                Fields::Named(ref fields) => {
+                    let mut l_args = quote! {};
+                    let mut r_args = quote! {};
+                    let mut cond = quote! {};
+                    for (i, field) in fields.named.iter().enumerate() {
+                        let ident = field.ident.as_ref().unwrap();
+                        let li = idfmt.make_call_site(format_args!("__l{i}"));
+                        let ri = idfmt.make_call_site(format_args!("__r{i}"));
+                        l_args.append_all(quote! { #ident: #li, });
+                        r_args.append_all(quote! { #ident: #ri, });
+                        if !cond.is_empty() {
+                            cond.append_all(quote! { && });
+                        }
+                        cond.append_all(quote! { #li == #ri });
+                    }
+
+                    quote! { (#tag { #l_args }, #tag { #r_args }) => #cond, }
+                }
+                Fields::Unnamed(ref fields) => {
+                    let len = fields.unnamed.len();
+                    let mut l_args = quote! {};
+                    let mut r_args = quote! {};
+                    let mut cond = quote! {};
+                    for i in 0..len {
+                        let li = idfmt.make_call_site(format_args!("__l{i}"));
+                        let ri = idfmt.make_call_site(format_args!("__r{i}"));
+                        l_args.append_all(quote! { #li, });
+                        r_args.append_all(quote! { #ri, });
+                        if !cond.is_empty() {
+                            cond.append_all(quote! { && });
+                        }
+                        cond.append_all(quote! { #li == #ri });
+                    }
+
+                    quote! { (#tag ( #l_args ), #tag ( #r_args )) => #cond, }
+                }
+                Fields::Unit => quote! { (#tag, #tag) => true, },
+            });
+        }
+        variants.append_all(quote! { (_, _) => false, });
+
+        let method = quote! {
+            #[inline]
+            fn eq(&self, other: &Self) -> bool {
+                match (self, other) {
+                    #variants
+                }
+            }
+        };
+        Ok((quote! { ::core::cmp::PartialEq }, method))
+    }
+
     fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
         let mut toks = Toks::new();
         let mut require_sep = false;
@@ -221,6 +376,10 @@ impl ImplTrait for ImplEq {
 
     fn allow_ignore_with(&self) -> Option<SimplePath> {
         Some(SimplePath::new(&["", "core", "cmp", "PartialEq"]))
+    }
+
+    fn enum_items(&self, _: &ItemEnum, _: &ImplArgs) -> Result<(Toks, Toks)> {
+        Ok((quote! { ::core::cmp::Eq }, quote! {}))
     }
 
     fn struct_items(&self, _: &ItemStruct, _: &ImplArgs) -> Result<(Toks, Toks)> {
@@ -320,6 +479,48 @@ impl ImplTrait for ImplHash {
 
     fn support_ignore(&self) -> bool {
         true
+    }
+
+    fn enum_items(&self, item: &ItemEnum, _: &ImplArgs) -> Result<(Toks, Toks)> {
+        let mut idfmt = IdentFormatter::new();
+        let name = &item.ident;
+        let mut variants = Toks::new();
+        for v in item.variants.iter() {
+            let ident = &v.ident;
+            variants.append_all(quote! { #name :: #ident });
+            variants.append_all(match v.fields {
+                Fields::Named(ref fields) => {
+                    let idents = fields.named.iter().map(|f| f.ident.as_ref().unwrap());
+                    let hashes = fields.named.iter().map(|f| {
+                        let ident = f.ident.as_ref().unwrap();
+                        quote! { ::core::hash::Hash::hash(&#ident, state); }
+                    });
+                    quote! { { #(#idents),* } => { #(#hashes);* } }
+                }
+                Fields::Unnamed(ref fields) => {
+                    let len = fields.unnamed.len();
+                    let mut bindings = Vec::with_capacity(len);
+                    let mut hashes = quote! {};
+                    for i in 0..len {
+                        let ident = idfmt.make_call_site(format_args!("_{i}"));
+                        bindings.push(quote! { ref #ident });
+                        hashes.append_all(quote! {
+                            ::core::hash::Hash::hash(&#ident, state);
+                        });
+                    }
+                    quote! { ( #(#bindings),* ) => { #hashes } }
+                }
+                Fields::Unit => quote! { => (), },
+            });
+        }
+        let method = quote! {
+            fn hash<__H: ::core::hash::Hasher>(&self, state: &mut __H) {
+                match *self {
+                    #variants
+                }
+            }
+        };
+        Ok((quote! { ::core::hash::Hash }, method))
     }
 
     fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {

@@ -24,8 +24,43 @@ mod singleton;
 
 pub use default::{find_attr_impl_default, AttrImplDefault, ImplDefault};
 pub use for_deref::ForDeref;
+use proc_macro2::Span;
 pub use scope::{Scope, ScopeAttr, ScopeItem};
 pub use singleton::{Singleton, SingletonField, SingletonScope};
+use syn::Ident;
+
+/// Tool to make a formatted [`Ident`]
+pub struct IdentFormatter(String);
+impl IdentFormatter {
+    /// Construct a formatter
+    pub fn new() -> Self {
+        IdentFormatter(String::with_capacity(32))
+    }
+
+    /// Construct a new [`Ident`]
+    pub fn make(&mut self, args: std::fmt::Arguments, span: Span) -> Ident {
+        use std::fmt::Write;
+
+        self.0.clear();
+        self.0.write_fmt(args).unwrap();
+        Ident::new(&self.0, span)
+    }
+
+    /// Construct a new [`Ident`], using [`Span::call_site`]
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use impl_tools_lib::IdentFormatter;
+    /// let mut idfmt = IdentFormatter::new();
+    /// let ident = idfmt.make_call_site(format_args!("x{}", 6));
+    /// assert_eq!(ident, "x6");
+    /// ```
+    #[inline]
+    pub fn make_call_site(&mut self, args: std::fmt::Arguments) -> Ident {
+        self.make(args, Span::call_site())
+    }
+}
 
 /// Simple, allocation-free path representation
 #[derive(PartialEq, Eq)]

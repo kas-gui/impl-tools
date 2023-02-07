@@ -2,6 +2,18 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2022-02-07
+
+-   Bump MSRV to 1.58.0 (#31)
+-   `#[autoimpl(Clone, Debug, PartialEq, Eq, Hash)]` now all support enums
+    (with optional `where` clause, without `ignore` clauses) (#31)
+-   Add `impl_tools_lib::ImplTrait::enum_impl`, `enum_items` with default impls;
+    `ImplTraits::expand` now supports enums (#31)
+-   Add `impl_tools_lib::Ident_formatter` utility (#31)
+
+Note: `PartialOrd, Ord` *could* now support enums (unimplemented). `ignore` and
+`using` clauses are deliberately not supported (due to syntactic ambiguity).
+
 ## [0.6.2], `impl-tools-lib` [0.7.1] — 2022-12-16
 
 -   Fix `#[autoimpl]` on traits: copy `#[cfg(..)]` attributes (#30)

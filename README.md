@@ -4,7 +4,7 @@ Impl-tools
 [![Test Status](https://github.com/kas-gui/impl-tools/workflows/Tests/badge.svg?event=push)](https://github.com/kas-gui/impl-tools/actions)
 [![Latest version](https://img.shields.io/crates/v/impl-tools.svg)](https://crates.io/crates/impl-tools)
 [![API](https://docs.rs/impl-tools/badge.svg)](https://docs.rs/impl-tools)
-[![Minimum rustc version](https://img.shields.io/badge/rustc-1.56+-lightgray.svg)](https://github.com/kas-gui/impl-tools#supported-rust-versions)
+[![Minimum rustc version](https://img.shields.io/badge/rustc-1.58+-lightgray.svg)](https://github.com/kas-gui/impl-tools#supported-rust-versions)
 
 A set of helper macros
 
@@ -204,7 +204,7 @@ For an example of this approach, see [kas-macros](https://github.com/kas-gui/kas
 Supported Rust Versions
 ------------------------------
 
-The MSRV is 1.56.0 for no particular reason other than that it is the first to support Edition 2021.
+The MSRV is 1.58.0.
 
 When using a sufficiently recent compiler version (presumably 1.65.0), generic associated types
 are supported (only applicable to `#[autoimpl]` on trait definitions using GATs).
