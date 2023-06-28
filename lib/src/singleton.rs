@@ -290,26 +290,7 @@ mod parsing {
     use super::*;
     use proc_macro_error::abort;
     use syn::parse::{Error, Parse, ParseStream, Result};
-    use syn::{braced, bracketed, parenthesized};
-
-    fn parse_attrs_inner(input: ParseStream, attrs: &mut Vec<Attribute>) -> Result<()> {
-        while input.peek(Token![#]) && input.peek2(Token![!]) {
-            let pound_token = input.parse()?;
-            let style = syn::AttrStyle::Inner(input.parse()?);
-            let content;
-            let bracket_token = bracketed!(content in input);
-            let path = content.call(syn::Path::parse_mod_style)?;
-            let tokens = content.parse()?;
-            attrs.push(Attribute {
-                pound_token,
-                style,
-                bracket_token,
-                path,
-                tokens,
-            });
-        }
-        Ok(())
-    }
+    use syn::{braced, parenthesized};
 
     fn parse_impl(in_ident: Option<&Ident>, input: ParseStream) -> Result<ItemImpl> {
         let mut attrs = input.call(Attribute::parse_outer)?;
@@ -388,7 +369,7 @@ mod parsing {
 
         let content;
         let brace_token = braced!(content in input);
-        parse_attrs_inner(&content, &mut attrs)?;
+        attrs.extend(Attribute::parse_inner(&content)?);
 
         let mut items = Vec::new();
         while !content.is_empty() {

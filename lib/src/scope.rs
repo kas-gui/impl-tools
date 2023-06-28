@@ -215,7 +215,7 @@ mod parsing {
     use crate::fields::parsing::data_struct;
     use syn::parse::{Parse, ParseStream};
     use syn::spanned::Spanned;
-    use syn::{braced, bracketed, AttrStyle, Error, Field, Lifetime, Path, TypePath, WhereClause};
+    use syn::{braced, Error, Field, Lifetime, Path, TypePath, WhereClause};
 
     impl Parse for Scope {
         fn parse(input: ParseStream) -> Result<Self> {
@@ -371,7 +371,7 @@ mod parsing {
 
         let content;
         let brace_token = braced!(content in input);
-        parse_attrs_inner(&content, &mut attrs)?;
+        attrs.extend(Attribute::parse_inner(&content)?);
 
         let mut items = Vec::new();
         while !content.is_empty() {
@@ -414,25 +414,6 @@ mod parsing {
         let brace_token = braced!(content in input);
         let named = content.parse_terminated(Field::parse_named)?;
         Ok(FieldsNamed { brace_token, named })
-    }
-
-    fn parse_attrs_inner(input: ParseStream, attrs: &mut Vec<Attribute>) -> Result<()> {
-        while input.peek(Token![#]) && input.peek2(Token![!]) {
-            let pound_token = input.parse()?;
-            let style = AttrStyle::Inner(input.parse()?);
-            let content;
-            let bracket_token = bracketed!(content in input);
-            let path = content.call(Path::parse_mod_style)?;
-            let tokens = content.parse()?;
-            attrs.push(Attribute {
-                pound_token,
-                style,
-                bracket_token,
-                path,
-                tokens,
-            });
-        }
-        Ok(())
     }
 }
 

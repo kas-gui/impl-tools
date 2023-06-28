@@ -9,8 +9,8 @@ use proc_macro2::TokenStream;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::{Pair, Punctuated};
-use syn::{parenthesized, token};
-use syn::{Attribute, ConstParam, LifetimeDef, PredicateLifetime, TraitBound};
+use syn::token;
+use syn::{Attribute, ConstParam, LifetimeDef, PredicateLifetime};
 use syn::{BoundLifetimes, Ident, Lifetime, Token, Type};
 
 /// Lifetimes and type parameters attached an item
@@ -77,16 +77,13 @@ pub struct TypeParam {
 
 /// A trait or lifetime used as a bound on a type parameter.
 ///
-/// This is a custom variant of [`syn::TypeParamBound`]
-/// which supports `trait` as a parameter bound.
+/// This is a superset of [`syn::TypeParamBound`].
 #[derive(Debug)]
 pub enum TypeParamBound {
-    /// A named trait used as a bound
-    Trait(TraitBound),
     /// `trait` used as a bound (substituted for the trait name by [`ToTokensSubst`])
     TraitSubst(Token![trait]),
-    /// A lifetime bound
-    Lifetime(Lifetime),
+    /// Everything else
+    Other(syn::TypeParamBound),
 }
 
 /// A `where` clause in a definition: `where T: Deserialize<'de>, D: 'static`.
@@ -239,23 +236,11 @@ mod parsing {
 
     impl Parse for TypeParamBound {
         fn parse(input: ParseStream) -> Result<Self> {
-            if input.peek(Lifetime) {
-                return input.parse().map(TypeParamBound::Lifetime);
-            }
-
             if input.peek(Token![trait]) {
-                return input.parse().map(TypeParamBound::TraitSubst);
+                input.parse().map(TypeParamBound::TraitSubst)
+            } else {
+                syn::TypeParamBound::parse(input).map(TypeParamBound::Other)
             }
-
-            if input.peek(token::Paren) {
-                let content;
-                let paren_token = parenthesized!(content in input);
-                let mut bound: TraitBound = content.parse()?;
-                bound.paren_token = Some(paren_token);
-                return Ok(TypeParamBound::Trait(bound));
-            }
-
-            input.parse().map(TypeParamBound::Trait)
         }
     }
 
@@ -470,19 +455,15 @@ mod printing_subst {
     impl ToTokensSubst for TypeParamBound {
         fn to_tokens_subst(&self, tokens: &mut TokenStream, subst: &TokenStream) {
             match self {
-                TypeParamBound::Trait(t) => t.to_tokens(tokens),
                 TypeParamBound::TraitSubst(_) => tokens.append_all(quote! { #subst }),
-                TypeParamBound::Lifetime(lt) => lt.to_tokens(tokens),
+                TypeParamBound::Other(bound) => bound.to_tokens(tokens),
             }
         }
     }
 }
 
 fn map_type_param_bound(bound: &syn::TypeParamBound) -> TypeParamBound {
-    match bound {
-        syn::TypeParamBound::Trait(bound) => TypeParamBound::Trait(bound.clone()),
-        syn::TypeParamBound::Lifetime(bound) => TypeParamBound::Lifetime(bound.clone()),
-    }
+    TypeParamBound::Other(bound.clone())
 }
 
 fn map_generic_param(param: &syn::GenericParam) -> GenericParam {
