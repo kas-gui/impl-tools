@@ -500,7 +500,7 @@ mod parsing {
             if generics.where_clause.is_none() && lookahead.peek(Paren) {
                 let content;
                 let paren_token = parenthesized!(content in input);
-                fields = content.parse_terminated(SingletonField::parse_unnamed)?;
+                fields = content.parse_terminated(SingletonField::parse_unnamed, Token![,])?;
 
                 lookahead = input.lookahead1();
                 if lookahead.peek(Token![where]) {
@@ -517,7 +517,7 @@ mod parsing {
                 let content;
                 let brace_token = braced!(content in input);
                 style = StructStyle::Regular(brace_token);
-                fields = content.parse_terminated(SingletonField::parse_named)?;
+                fields = content.parse_terminated(SingletonField::parse_named, Token![,])?;
             } else if lookahead.peek(Semi) {
                 style = StructStyle::Unit(input.parse()?);
                 fields = Punctuated::new();

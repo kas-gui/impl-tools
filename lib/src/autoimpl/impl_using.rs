@@ -144,7 +144,7 @@ impl ImplTrait for ImplDeref {
                 }) => {
                     let mut result = None;
                     for arg in args {
-                        if let syn::GenericArgument::Binding(b) = arg {
+                        if let syn::GenericArgument::AssocType(b) = arg {
                             if b.ident == "Target" && result.is_none() {
                                 result = Some(b.ty.clone());
                                 continue;

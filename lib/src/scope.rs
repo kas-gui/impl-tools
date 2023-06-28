@@ -154,7 +154,7 @@ impl Scope {
 
         let mut i = 0;
         while i < self.attrs.len() {
-            if let Some(rule) = find_rule(&self.attrs[i].path) {
+            if let Some(rule) = find_rule(&self.attrs[i].path()) {
                 let attr = self.attrs.remove(i);
 
                 if !rule.support_repetition() {
@@ -398,7 +398,7 @@ mod parsing {
 
         let content;
         let brace = braced!(content in input);
-        let variants = content.parse_terminated(Variant::parse)?;
+        let variants = content.parse_terminated(Variant::parse, Token![,])?;
 
         Ok((where_clause, brace, variants))
     }
@@ -412,7 +412,7 @@ mod parsing {
     pub(crate) fn parse_braced(input: ParseStream) -> Result<FieldsNamed> {
         let content;
         let brace_token = braced!(content in input);
-        let named = content.parse_terminated(Field::parse_named)?;
+        let named = content.parse_terminated(Field::parse_named, Token![,])?;
         Ok(FieldsNamed { brace_token, named })
     }
 }

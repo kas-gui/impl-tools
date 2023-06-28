@@ -10,7 +10,7 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::{Pair, Punctuated};
 use syn::token;
-use syn::{Attribute, ConstParam, LifetimeDef, PredicateLifetime};
+use syn::{Attribute, ConstParam, LifetimeParam, PredicateLifetime};
 use syn::{BoundLifetimes, Ident, Lifetime, Token, Type};
 
 /// Lifetimes and type parameters attached an item
@@ -50,7 +50,7 @@ pub enum GenericParam {
     /// Type parameter
     Type(TypeParam),
     /// Lifetime parameter
-    Lifetime(LifetimeDef),
+    Lifetime(LifetimeParam),
     /// `const` parameter
     Const(ConstParam),
 }
@@ -149,7 +149,7 @@ mod parsing {
                 let attrs = input.call(Attribute::parse_outer)?;
                 let lookahead = input.lookahead1();
                 if lookahead.peek(Lifetime) {
-                    params.push_value(GenericParam::Lifetime(LifetimeDef {
+                    params.push_value(GenericParam::Lifetime(LifetimeParam {
                         attrs,
                         ..input.parse()?
                     }));

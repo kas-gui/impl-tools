@@ -297,14 +297,15 @@ impl ImplTraits {
         item: Toks,
         find_impl: impl Fn(&Path) -> Option<&'static dyn ImplTrait>,
     ) -> Toks {
-        let mut toks = Toks::new();
         match parse2::<Item>(item) {
-            Ok(Item::Enum(item)) => toks = self.expand_enum(item, find_impl),
-            Ok(Item::Struct(item)) => toks = self.expand_struct(item, find_impl),
-            Ok(item) => emit_error!(item, "expected struct"),
-            Err(err) => emit_error!(err),
+            Ok(Item::Enum(item)) => self.expand_enum(item, find_impl),
+            Ok(Item::Struct(item)) => self.expand_struct(item, find_impl),
+            Ok(item) => {
+                emit_error!(item, "expected struct");
+                Toks::new()
+            }
+            Err(err) => err.into_compile_error(),
         }
-        toks
     }
 
     fn expand_enum(
