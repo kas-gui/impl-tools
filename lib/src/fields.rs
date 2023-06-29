@@ -93,7 +93,7 @@ pub(crate) mod parsing {
             let brace_token = braced!(content in input);
             Ok(FieldsNamed {
                 brace_token,
-                fields: content.parse_terminated(Field::parse_named)?,
+                fields: content.parse_terminated(Field::parse_named, Token![,])?,
             })
         }
     }
@@ -104,7 +104,7 @@ pub(crate) mod parsing {
             let paren_token = parenthesized!(content in input);
             Ok(FieldsUnnamed {
                 paren_token,
-                fields: content.parse_terminated(Field::parse_unnamed)?,
+                fields: content.parse_terminated(Field::parse_unnamed, Token![,])?,
             })
         }
     }
@@ -186,7 +186,7 @@ pub(crate) mod parsing {
     fn parse_braced(input: ParseStream) -> Result<FieldsNamed> {
         let content;
         let brace_token = braced!(content in input);
-        let fields = content.parse_terminated(Field::parse_named)?;
+        let fields = content.parse_terminated(Field::parse_named, Token![,])?;
         Ok(FieldsNamed {
             brace_token,
             fields,

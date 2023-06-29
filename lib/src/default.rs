@@ -11,7 +11,7 @@ use proc_macro_error::emit_error;
 use quote::quote;
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::spanned::Spanned;
-use syn::{parse2, Attribute, Expr, Generics, Ident, Item, Token};
+use syn::{parse2, Attribute, Expr, Generics, Ident, Item, Meta, Token};
 
 /// `#[impl_default]` attribute
 pub struct ImplDefault {
@@ -83,14 +83,18 @@ impl ImplDefault {
     }
 
     fn parse_attr(attr: Attribute) -> Result<Self> {
-        if attr.tokens.is_empty() {
-            return Ok(ImplDefault {
+        match attr.meta {
+            Meta::Path(_) => Ok(ImplDefault {
                 expr: None,
                 where_clause: None,
                 span: attr.span(),
-            });
+            }),
+            Meta::List(list) => list.parse_args(),
+            Meta::NameValue(meta) => Err(Error::new_spanned(
+                meta,
+                "expected #[impl_default] or #[impl_default(EXPR)]",
+            )),
         }
-        attr.parse_args()
     }
 }
 

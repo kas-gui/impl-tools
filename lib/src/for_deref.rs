@@ -12,7 +12,7 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use std::{iter, slice};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
-use syn::token::{Colon2, Comma, Eq};
+use syn::token::{Comma, Eq, PathSep};
 use syn::{parse_quote, Attribute, FnArg, Ident, Item, Token, TraitItem, Type, TypePath};
 
 /// Autoimpl for types supporting `Deref`
@@ -151,10 +151,7 @@ impl ForDeref {
                 emit_error!(item, "expected trait");
                 return TokenStream::new();
             }
-            Err(err) => {
-                emit_error!(err);
-                return TokenStream::new();
-            }
+            Err(err) => return err.into_compile_error(),
         };
 
         #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -182,7 +179,7 @@ impl ForDeref {
             match item {
                 TraitItem::Const(item) => {
                     for attr in item.attrs.iter() {
-                        if attr.path == parse_quote! { cfg } {
+                        if *attr.path() == parse_quote! { cfg } {
                             attr.to_tokens(tokens);
                         }
                     }
@@ -194,14 +191,14 @@ impl ForDeref {
 
                     Eq::default().to_tokens(tokens);
                     definitive.to_tokens(tokens);
-                    Colon2::default().to_tokens(tokens);
+                    PathSep::default().to_tokens(tokens);
                     item.ident.to_tokens(tokens);
 
                     item.semi_token.to_tokens(tokens);
                 }
-                TraitItem::Method(item) => {
+                TraitItem::Fn(item) => {
                     for attr in item.attrs.iter() {
-                        if attr.path == parse_quote! { cfg } {
+                        if *attr.path() == parse_quote! { cfg } {
                             attr.to_tokens(tokens);
                         }
                     }
@@ -255,7 +252,7 @@ impl ForDeref {
                 }
                 TraitItem::Type(item) => {
                     for attr in item.attrs.iter() {
-                        if attr.path == parse_quote! { cfg } {
+                        if *attr.path() == parse_quote! { cfg } {
                             attr.to_tokens(tokens);
                         }
                     }
@@ -275,7 +272,7 @@ impl ForDeref {
 
                     Eq::default().to_tokens(tokens);
                     definitive.to_tokens(tokens);
-                    Colon2::default().to_tokens(tokens);
+                    PathSep::default().to_tokens(tokens);
                     item.ident.to_tokens(tokens);
                     ty_generics.to_tokens(tokens);
 

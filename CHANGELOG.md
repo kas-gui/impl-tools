@@ -2,7 +2,11 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.0] — 2022-02-07
+## [0.9.0] — 2023-06-28
+
+-   Update to syn v2.0.0
+
+## [0.8.0] — 2023-02-07
 
 -   Bump MSRV to 1.58.0 (#31)
 -   `#[autoimpl(Clone, Debug, PartialEq, Eq, Hash)]` now all support enums
