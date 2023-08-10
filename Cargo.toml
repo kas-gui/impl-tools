@@ -14,8 +14,9 @@ documentation = "https://docs.rs/impl-tools/"
 [lib]
 proc-macro = true
 
-[dependencies]
-proc-macro-error = "1.0"
+[dependencies.proc-macro-error]
+version = "1.0"
+default-features = false
 
 [dependencies.syn]
 version = "2.0.0"
