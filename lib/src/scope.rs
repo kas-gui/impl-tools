@@ -3,6 +3,8 @@
 // You may obtain a copy of the License in the LICENSE-APACHE file or at:
 //     https://www.apache.org/licenses/LICENSE-2.0
 
+//! The `impl_scope!` macro
+
 use crate::{fields::Fields, SimplePath};
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::emit_error;
@@ -14,6 +16,8 @@ use syn::{
     parse_quote, Attribute, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Path, Result,
     Token, Type, Variant, Visibility,
 };
+
+pub use super::default::{find_impl_default, AttrImplDefault};
 
 /// Attribute rule for [`Scope`]
 ///

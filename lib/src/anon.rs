@@ -3,8 +3,11 @@
 // You may obtain a copy of the License in the LICENSE-APACHE file or at:
 //     https://www.apache.org/licenses/LICENSE-2.0
 
+//! The `impl_anon!` macro
+
 use crate::fields::{Field, Fields, FieldsNamed, FieldsUnnamed, StructStyle};
-use crate::{IdentFormatter, Scope, ScopeItem};
+use crate::scope::{Scope, ScopeItem};
+use crate::IdentFormatter;
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::token::{Brace, Colon, Comma, Eq, Paren, Semi};

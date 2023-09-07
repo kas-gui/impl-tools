@@ -5,7 +5,8 @@
 
 use crate::fields::{Fields, FieldsNamed, FieldsUnnamed};
 use crate::generics::{clause_to_toks, WhereClause};
-use crate::{Scope, ScopeAttr, ScopeItem, SimplePath};
+use crate::scope::{Scope, ScopeAttr, ScopeItem};
+use crate::SimplePath;
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::emit_error;
 use quote::quote;
@@ -189,7 +190,7 @@ impl Parse for ImplDefault {
 /// Helper fn which can be passed to [`Scope::apply_attrs`]
 ///
 /// This optionally matches [`AttrImplDefault`].
-pub fn find_attr_impl_default(path: &syn::Path) -> Option<&'static dyn ScopeAttr> {
+pub fn find_impl_default(path: &syn::Path) -> Option<&'static dyn ScopeAttr> {
     AttrImplDefault
         .path()
         .matches(path)

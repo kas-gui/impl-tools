@@ -14,19 +14,15 @@
 #![allow(clippy::unnecessary_lazy_evaluations)]
 #![allow(clippy::style)]
 
-mod anon;
+pub mod anon;
 pub mod autoimpl;
 mod default;
 pub mod fields;
-mod for_deref;
 pub mod generics;
-mod scope;
+pub mod scope;
 
-pub use anon::{Anon, AnonField, AnonScope};
-pub use default::{find_attr_impl_default, AttrImplDefault, ImplDefault};
-pub use for_deref::ForDeref;
+pub use default::ImplDefault;
 use proc_macro2::Span;
-pub use scope::{Scope, ScopeAttr, ScopeItem};
 use syn::Ident;
 
 /// Tool to make a formatted [`Ident`](struct@Ident)

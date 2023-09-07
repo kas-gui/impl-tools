@@ -39,6 +39,7 @@ doc_comment::doctest!("../README.md");
 
 extern crate proc_macro;
 
+use lib::{anon, scope};
 use proc_macro::TokenStream;
 use proc_macro_error::{emit_call_site_error, proc_macro_error};
 use syn::parse_macro_input;
@@ -372,8 +373,8 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_error]
 #[proc_macro]
 pub fn impl_scope(input: TokenStream) -> TokenStream {
-    let mut scope = parse_macro_input!(input as lib::Scope);
-    scope.apply_attrs(lib::find_attr_impl_default);
+    let mut scope = parse_macro_input!(input as scope::Scope);
+    scope.apply_attrs(scope::find_impl_default);
     scope.expand().into()
 }
 
@@ -421,7 +422,7 @@ pub fn impl_scope(input: TokenStream) -> TokenStream {
 #[proc_macro_error]
 #[proc_macro]
 pub fn impl_anon(input: TokenStream) -> TokenStream {
-    let mut scope = parse_macro_input!(input as lib::Anon).into_scope();
-    scope.apply_attrs(lib::find_attr_impl_default);
+    let mut scope = parse_macro_input!(input as anon::Anon).into_scope();
+    scope.apply_attrs(scope::find_impl_default);
     scope.expand().into()
 }

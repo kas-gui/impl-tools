@@ -6,7 +6,7 @@
 //! Implementation of the `#[autoimpl]` attribute
 
 use crate::generics::{clause_to_toks, WhereClause};
-use crate::{ForDeref, SimplePath};
+use crate::SimplePath;
 use proc_macro2::{Span, TokenStream as Toks};
 use proc_macro_error::emit_error;
 use quote::{quote, TokenStreamExt};
@@ -17,9 +17,11 @@ use syn::{
     Token,
 };
 
+mod for_deref;
 mod impl_misc;
 mod impl_using;
 
+pub use for_deref::ForDeref;
 pub use impl_misc::*;
 pub use impl_using::*;
 
