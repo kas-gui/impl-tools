@@ -34,6 +34,19 @@ fn wrapper() {
     assert_eq!(format!("{:?}", Wrapper((), ())), "Wrapper((), _)");
 }
 
+#[autoimpl(Clone)]
+struct ContainsRef<'a, T: Clone> {
+    a: &'a T,
+}
+
+#[test]
+fn contains_ref() {
+    let a = 1;
+    let b = ContainsRef { a: &a };
+    let c = b.clone();
+    let _ = c.a;
+}
+
 #[autoimpl(Clone, Default where A: trait, B: trait)]
 #[autoimpl(Debug ignore self.c where A: Debug)]
 struct X<A, B: Debug, C> {
