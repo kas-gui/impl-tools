@@ -1,11 +1,11 @@
-// Test singleton!
+// Test impl_anon!
 
 use core::fmt::Debug;
-use impl_tools::singleton;
+use impl_tools::impl_anon;
 
 #[test]
 fn a() {
-    let a = singleton! {
+    let a = impl_anon! {
         #[derive(Clone, Debug)]
         struct<T: Clone + Debug>(T = "abc");
 
@@ -21,7 +21,7 @@ fn a() {
 
 #[test]
 fn b() {
-    let b = singleton! {
+    let b = impl_anon! {
         #[derive(Clone, Debug)]
         struct<T: Clone + Debug> {
             t: T = 123,
