@@ -34,7 +34,7 @@ impl ImplTrait for ImplClone {
                     let idents = fields.named.iter().map(|f| f.ident.as_ref().unwrap());
                     let clones = fields.named.iter().map(|f| {
                         let ident = f.ident.as_ref().unwrap();
-                        quote! { #ident: #ident.clone() }
+                        quote! { #ident: ::core::clone::Clone::clone(&#ident) }
                     });
                     quote! { #tag { #(#idents),* } => #tag { #(#clones),* }, }
                 }
@@ -45,7 +45,7 @@ impl ImplTrait for ImplClone {
                     for i in 0..len {
                         let ident = idfmt.make_call_site(format_args!("_{i}"));
                         bindings.push(quote! { ref #ident });
-                        items.push(quote! { #ident.clone() });
+                        items.push(quote! { ::core::clone::Clone::clone(&#ident) });
                     }
                     quote! { #tag ( #(#bindings),* ) => #tag ( #(#items),* ), }
                 }
@@ -72,7 +72,9 @@ impl ImplTrait for ImplClone {
                     if args.ignore_named(ident) {
                         toks.append_all(quote! { #ident: Default::default(), });
                     } else {
-                        toks.append_all(quote! { #ident: self.#ident.clone(), });
+                        toks.append_all(
+                            quote! { #ident: ::core::clone::Clone::clone(&self.#ident), },
+                        );
                     }
                 }
                 quote! { #type_ident { #toks } }
@@ -84,7 +86,7 @@ impl ImplTrait for ImplClone {
                     if args.ignore_unnamed(&index) {
                         toks.append_all(quote! { Default::default(), });
                     } else {
-                        toks.append_all(quote! { self.#index.clone(), });
+                        toks.append_all(quote! { ::core::clone::Clone::clone(&self.#index), });
                     }
                 }
                 quote! { #type_ident ( #toks ) }
