@@ -14,22 +14,18 @@
 #![allow(clippy::unnecessary_lazy_evaluations)]
 #![allow(clippy::style)]
 
+pub mod anon;
 pub mod autoimpl;
 mod default;
 pub mod fields;
-mod for_deref;
 pub mod generics;
-mod scope;
-mod singleton;
+pub mod scope;
 
-pub use default::{find_attr_impl_default, AttrImplDefault, ImplDefault};
-pub use for_deref::ForDeref;
+pub use default::ImplDefault;
 use proc_macro2::Span;
-pub use scope::{Scope, ScopeAttr, ScopeItem};
-pub use singleton::{Singleton, SingletonField, SingletonScope};
 use syn::Ident;
 
-/// Tool to make a formatted [`Ident`]
+/// Tool to make a formatted [`Ident`](struct@Ident)
 pub struct IdentFormatter(String);
 impl IdentFormatter {
     /// Construct a formatter
@@ -37,7 +33,7 @@ impl IdentFormatter {
         IdentFormatter(String::with_capacity(32))
     }
 
-    /// Construct a new [`Ident`]
+    /// Construct a new [`Ident`](struct@Ident)
     pub fn make(&mut self, args: std::fmt::Arguments, span: Span) -> Ident {
         use std::fmt::Write;
 
@@ -46,7 +42,7 @@ impl IdentFormatter {
         Ident::new(&self.0, span)
     }
 
-    /// Construct a new [`Ident`], using [`Span::call_site`]
+    /// Construct a new [`Ident`](struct@Ident), using [`Span::call_site`]
     ///
     /// # Example
     ///

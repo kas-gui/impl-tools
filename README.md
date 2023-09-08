@@ -159,9 +159,9 @@ impl_tools::impl_scope! {
 Caveat: `rustfmt` won't currently touch the contents. Hopefully that
 [can be fixed](https://github.com/rust-lang/rustfmt/pull/5538)!
 
-### Singleton
+### Impl Anon
 
-`singleton!` is a function-like macro to construct a single-use struct with
+`impl_anon!` is a function-like macro to construct a single-use struct with
 custom implementations (similar: [RFC#2604](https://github.com/rust-lang/rfcs/pull/2604)).
 
 Example:
@@ -169,7 +169,7 @@ Example:
 use std::fmt;
 fn main() {
     let world = "world";
-    let says_hello_world = impl_tools::singleton! {
+    let says_hello_world = impl_tools::impl_anon! {
         struct(&'static str = world);
         impl fmt::Display for Self {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

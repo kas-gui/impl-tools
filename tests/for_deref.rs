@@ -6,6 +6,7 @@ extern crate alloc;
 use alloc::boxed::Box;
 
 use core::fmt::Debug;
+use core::ops::Deref;
 use impl_tools::autoimpl;
 
 #[autoimpl(for<'a, T: trait> &'a mut T, Box<T>)]
@@ -152,4 +153,10 @@ trait Cfgs {
 
     #[cfg(feature = "never")]
     fn excluded(&self);
+}
+
+#[autoimpl(for<T: trait, U: Deref<Target = T> + Debug + ?Sized> U)]
+trait SharedData<Key>: Debug {
+    type Item;
+    fn get(&self, key: &Key) -> Option<Self::Item>;
 }
