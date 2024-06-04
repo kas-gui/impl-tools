@@ -168,7 +168,6 @@ impl Scope {
                     // vtables both compare equal.
                     let span = attr.span();
                     let ptr = rule as *const dyn ScopeAttr;
-                    #[allow(clippy::vtable_address_comparisons)]
                     if let Some(first) = applied.iter().find(|(_, p)| std::ptr::eq(*p, ptr)) {
                         emit_error!(span, "repeated use of attribute not allowed");
                         emit_error!(first.0, "first usage here");
