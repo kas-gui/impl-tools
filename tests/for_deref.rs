@@ -151,7 +151,7 @@ trait Cfgs {
     #[cfg(test)]
     fn included(&self);
 
-    #[cfg(feature = "never")]
+    #[cfg(mock_feature)]
     fn excluded(&self);
 }
 
