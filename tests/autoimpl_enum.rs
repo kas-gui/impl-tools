@@ -10,6 +10,7 @@ use impl_tools::{autoimpl, impl_default};
 fn test_has_clone(_: impl Clone) {}
 fn test_has_copy(_: impl Copy) {}
 
+#[allow(unused)]
 #[autoimpl(std::clone::Clone, core::fmt::Debug)]
 #[autoimpl(std::cmp::PartialEq, std::cmp::Eq, core::hash::Hash)]
 enum Void {}
