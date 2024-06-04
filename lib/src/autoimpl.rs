@@ -302,10 +302,11 @@ impl ImplTraits {
         match parse2::<Item>(item) {
             Ok(Item::Enum(item)) => self.expand_enum(item, find_impl),
             Ok(Item::Struct(item)) => self.expand_struct(item, find_impl),
-            Ok(item) => {
-                emit_error!(item, "expected struct");
-                Toks::new()
-            }
+            Ok(_) => syn::Error::new(
+                Span::call_site(),
+                "#[autoimpl(Trait)] can only be used on enum or struct items",
+            )
+            .into_compile_error(),
             Err(err) => err.into_compile_error(),
         }
     }
