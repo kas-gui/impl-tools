@@ -11,14 +11,9 @@ jobs:
     name: Nightly, format and Doc
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-
+        uses: dtolnay/rust-toolchain@nightly
       - name: Rustfmt check
         uses: actions-rs/cargo@v1
         with:
@@ -36,14 +31,9 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: beta
-          override: true
-
+        uses: dtolnay/rust-toolchain@beta
       - name: Test impl-tools-lib
         run: cargo test --manifest-path lib/Cargo.toml --all-features
       - name: Test impl-tools
@@ -54,14 +44,9 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
+        uses: dtolnay/rust-toolchain@stable
       - name: Test impl-tools-lib
         run: cargo test --manifest-path lib/Cargo.toml --all-features
       - name: Test impl-tools
@@ -72,14 +57,9 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: "1.58.0"
-          override: true
-
+        uses: dtolnay/rust-toolchain@1.58.1
       - name: Test impl-tools-lib
         run: cargo test --manifest-path lib/Cargo.toml --all-features --lib --tests
       - name: Test impl-tools
