@@ -9,6 +9,7 @@ keywords = ["derive", "trait"]
 repository = "https://github.com/kas-gui/impl-tools"
 readme = "README.md"
 documentation = "https://docs.rs/impl-tools-lib/"
+rust-version = "1.58.0"
 
 [dependencies]
 quote = "1.0"

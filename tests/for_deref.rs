@@ -81,6 +81,7 @@ fn g() {
     impls_g(&mut (Box::new(S) as Box<dyn G<i32>>));
 }
 
+#[allow(unused)]
 #[autoimpl(for<T: trait + ?Sized> &T)]
 trait H<X, Y: G<X>>
 where
@@ -146,15 +147,17 @@ fn custom_deref_target() {
     assert_eq!(y, 12);
 }
 
+#[allow(unused)]
 #[autoimpl(for<T: trait + ?Sized> &T)]
 trait Cfgs {
     #[cfg(test)]
     fn included(&self);
 
-    #[cfg(feature = "never")]
+    #[cfg(mock_feature)]
     fn excluded(&self);
 }
 
+#[allow(unused)]
 #[autoimpl(for<T: trait, U: Deref<Target = T> + Debug + ?Sized> U)]
 trait SharedData<Key>: Debug {
     type Item;

@@ -11,86 +11,65 @@ jobs:
     name: Nightly, format and Doc
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-          components: rustfmt, clippy
-
-      - name: Rustfmt check
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        uses: dtolnay/rust-toolchain@nightly
       - name: Build docs
         run: cargo doc --all-features --all --no-deps
       - name: Test impl-tools-lib
         run: cargo test --manifest-path lib/Cargo.toml --all-features
       - name: Test impl-tools
         run: cargo test --all-features
-      - name: Clippy
-        run: cargo clippy --all
 
   beta:
     name: Beta on MacOS
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: beta
-          override: true
-          components: clippy
-
+        uses: dtolnay/rust-toolchain@beta
       - name: Test impl-tools-lib
         run: cargo test --manifest-path lib/Cargo.toml --all-features
       - name: Test impl-tools
         run: cargo test --all-features
-      - name: Clippy (beta)
-        run: cargo clippy --all -- -D warnings -A unknown_lints
 
   stable:
     name: Stable on Windows
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: clippy
-
+        uses: dtolnay/rust-toolchain@stable
       - name: Test impl-tools-lib
         run: cargo test --manifest-path lib/Cargo.toml --all-features
       - name: Test impl-tools
         run: cargo test --all-features
-      - name: Clippy (stable)
-        run: cargo clippy --all -- -D warnings -A unknown_lints
 
   msrv:
     name: MSRV
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: "1.58.0"
-          override: true
-          components: clippy
-
+        uses: dtolnay/rust-toolchain@1.58.1
       - name: Test impl-tools-lib
         run: cargo test --manifest-path lib/Cargo.toml --all-features --lib --tests
       - name: Test impl-tools
         run: cargo test --all-features --lib --tests
+
+  workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+      - name: clippy
+        # clippy::assigning_clones should be unnecessary in rust 1.80
+        run: cargo clippy --all -- -A clippy::assigning_clones -D warnings

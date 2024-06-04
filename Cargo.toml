@@ -10,6 +10,7 @@ categories = ["development-tools::procedural-macro-helpers"]
 repository = "https://github.com/kas-gui/impl-tools"
 readme = "README.md"
 documentation = "https://docs.rs/impl-tools/"
+rust-version = "1.58.0"
 
 [lib]
 proc-macro = true
@@ -34,3 +35,6 @@ autocfg = "1.1.0"
 
 [workspace]
 members = ["lib"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rustc_1_65)', 'cfg(mock_feature)'] }

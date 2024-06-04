@@ -9,38 +9,16 @@ use crate::generics::{GenericParam, Generics, TypeParamBound, WherePredicate};
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::{emit_call_site_error, emit_error};
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::{iter, slice};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Comma, Eq, PathSep};
-use syn::{parse_quote, Attribute, FnArg, Ident, Item, Token, TraitItem, Type, TypePath};
+use syn::{parse_quote, FnArg, Ident, Item, Token, TraitItem, Type, TypePath};
 
 /// Autoimpl for types supporting `Deref`
 pub struct ForDeref {
     generics: Generics,
     definitive: Ident,
     targets: Punctuated<Type, Comma>,
-}
-
-// Copied from syn
-trait FilterAttrs<'a> {
-    type Ret: Iterator<Item = &'a Attribute>;
-
-    fn outer(self) -> Self::Ret;
-}
-
-impl<'a> FilterAttrs<'a> for &'a [Attribute] {
-    type Ret = iter::Filter<slice::Iter<'a, Attribute>, fn(&&Attribute) -> bool>;
-
-    fn outer(self) -> Self::Ret {
-        fn is_outer(attr: &&Attribute) -> bool {
-            match attr.style {
-                syn::AttrStyle::Outer => true,
-                syn::AttrStyle::Inner(_) => false,
-            }
-        }
-        self.iter().filter(is_outer)
-    }
 }
 
 mod parsing {
