@@ -10,6 +10,7 @@ categories = ["development-tools::procedural-macro-helpers"]
 repository = "https://github.com/kas-gui/impl-tools"
 readme = "README.md"
 documentation = "https://docs.rs/impl-tools/"
+rust-version = "1.58.0"
 
 [lib]
 proc-macro = true
