@@ -54,7 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@1.58.1
+        uses: dtolnay/rust-toolchain@1.90.0
       - name: Test impl-tools-lib
         run: cargo test --manifest-path lib/Cargo.toml --all-features --lib --tests
       - name: Test impl-tools
