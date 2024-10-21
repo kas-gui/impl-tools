@@ -41,7 +41,7 @@ extern crate proc_macro;
 
 use lib::{anon, scope};
 use proc_macro::TokenStream;
-use proc_macro_error::{emit_call_site_error, proc_macro_error};
+use proc_macro_error2::{emit_call_site_error, proc_macro_error};
 use syn::parse_macro_input;
 
 use impl_tools_lib::{self as lib, autoimpl};

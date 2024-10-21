@@ -8,7 +8,7 @@
 use crate::generics::{clause_to_toks, WhereClause};
 use crate::SimplePath;
 use proc_macro2::{Span, TokenStream as Toks};
-use proc_macro_error::emit_error;
+use proc_macro_error2::emit_error;
 use quote::{quote, TokenStreamExt};
 use syn::spanned::Spanned;
 use syn::token::Comma;

@@ -15,8 +15,8 @@ rust-version = "1.58.0"
 [lib]
 proc-macro = true
 
-[dependencies.proc-macro-error]
-version = "1.0"
+[dependencies.proc-macro-error2]
+version = "2.0"
 default-features = false
 
 [dependencies.syn]
