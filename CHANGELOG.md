@@ -2,6 +2,13 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] — 2024-10-21
+
+-   Improve CI workflows (#38)
+-   Explicit MSRV = 1.58 (#38)
+-   Replace dependency `proc-macro-error` with `proc-macro-error2` (#41)
+-   Bump MSRV to 1.61 (#42)
+
 ## [0.10.0] — 2023-09-07
 
 -   Rename `singleton!` → `impl_anon!` (#36)
