@@ -291,7 +291,7 @@ impl ToTokens for AnonScope {
 
 mod parsing {
     use super::*;
-    use proc_macro_error::abort;
+    use proc_macro_error2::abort;
     use syn::parse::{Error, Parse, ParseStream, Result};
     use syn::{braced, parenthesized};
 

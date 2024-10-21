@@ -7,7 +7,7 @@
 
 use crate::generics::{GenericParam, Generics, TypeParamBound, WherePredicate};
 use proc_macro2::{Span, TokenStream};
-use proc_macro_error::{emit_call_site_error, emit_error};
+use proc_macro_error2::{emit_call_site_error, emit_error};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
