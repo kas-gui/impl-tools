@@ -71,5 +71,4 @@ jobs:
       - name: rustfmt
         run: cargo fmt --all -- --check
       - name: clippy
-        # clippy::assigning_clones should be unnecessary in rust 1.80
-        run: cargo clippy --all -- -A clippy::assigning_clones -D warnings
+        run: cargo clippy --workspace -- -D warnings
