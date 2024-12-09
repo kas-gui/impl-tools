@@ -55,6 +55,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@1.61.0
+      - name: Use Cargo.lock.msrv
+        run: cp Cargo.lock.msrv Cargo.lock
       - name: Test impl-tools-lib
         run: cargo test --manifest-path lib/Cargo.toml --all-features --lib --tests
       - name: Test impl-tools
