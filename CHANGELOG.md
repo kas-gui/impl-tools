@@ -2,6 +2,13 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2], [impl-tools-lib-0.11.0] — 2024-12-09
+
+Re-release, bumping `impl-tools-lib` to v0.11.0 since it turns out that switching to `proc-macro-error2` was an API-breaking release for `impl-tools-lib` (this is only apparent if a macro emits an error, resulting in a message like "help: message: proc-macro-error2 API cannot be used outside of `entry_point` invocation, perhaps you forgot to annotate your #[proc_macro] function with `#[proc_macro_error]
+").
+
+`impl-tools` is unaffected excepting where an incompatible version of `impl-tools-lib` is used. Broken versions will be yanked.
+
 ## [0.10.1] — 2024-10-21
 
 -   Improve CI workflows (#38)
