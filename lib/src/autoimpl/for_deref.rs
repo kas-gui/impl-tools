@@ -160,7 +160,7 @@ impl ForDeref {
         // Tokenize, like ToTokens impls for syn::TraitItem*, but for definition
         let mut impl_items = TokenStream::new();
         let tokens = &mut impl_items;
-        for item in &trait_def.items {
+        for item in trait_def.items.into_iter() {
             match item {
                 TraitItem::Const(item) => {
                     for attr in item.attrs.iter() {
@@ -181,7 +181,7 @@ impl ForDeref {
 
                     item.semi_token.to_tokens(tokens);
                 }
-                TraitItem::Fn(item) => {
+                TraitItem::Fn(mut item) => {
                     for attr in item.attrs.iter() {
                         if propegate_attr_to_impl(attr) {
                             attr.to_tokens(tokens);
@@ -203,6 +203,27 @@ impl ForDeref {
                         continue;
                     }
 
+                    for (i, arg) in item.sig.inputs.iter_mut().enumerate() {
+                        if let FnArg::Typed(ref mut ty) = arg {
+                            if let Pat::Ident(pat) = &mut *ty.pat {
+                                // We can keep the ident but must not use `ref` / `mut` modifiers
+                                pat.by_ref = None;
+                                pat.mutability = None;
+                                assert_eq!(pat.subpat, None);
+                            } else {
+                                // Substitute a fresh ident
+                                let name = format!("arg{i}");
+                                let ident = Ident::new(&name, Span::call_site());
+                                ty.pat = Box::new(Pat::Ident(syn::PatIdent {
+                                    attrs: vec![],
+                                    by_ref: None,
+                                    mutability: None,
+                                    ident,
+                                    subpat: None,
+                                }));
+                            }
+                        }
+                    }
                     item.sig.to_tokens(tokens);
 
                     bound = bound.max(match item.sig.inputs.first() {
@@ -245,44 +266,7 @@ impl ForDeref {
                                     };
                                 }
 
-                                fn process_pat(
-                                    pat: &Pat,
-                                    toks: &mut TokenStream,
-                                ) -> Result<(), ()> {
-                                    match pat {
-                                        Pat::Ident(syn::PatIdent {
-                                            attrs,
-                                            ident,
-                                            subpat,
-                                            ..
-                                        }) => {
-                                            for attr in attrs {
-                                                attr.to_tokens(toks);
-                                            }
-                                            ident.to_tokens(toks);
-                                            assert!(subpat.is_none());
-                                            Ok(())
-                                        }
-                                        Pat::Paren(syn::PatParen { attrs, pat, .. }) => {
-                                            for attr in attrs {
-                                                attr.to_tokens(toks);
-                                            }
-                                            process_pat(pat, toks)
-                                        }
-                                        other => {
-                                            // NOTE: macros are legal in this position but cannot be reliably handled
-                                            emit_error!(
-                                                other,
-                                                "not supported by #[autoimpl(for<...> ...)]"
-                                            );
-                                            Err(())
-                                        }
-                                    }
-                                }
-
-                                if let Err(()) = process_pat(&arg.pat, &mut toks) {
-                                    return TokenStream::new();
-                                }
+                                arg.pat.to_tokens(&mut toks);
                             }
                         };
                         toks

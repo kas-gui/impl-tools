@@ -40,14 +40,24 @@ fn z() {
     impls_z(Box::new(()));
 }
 
+macro_rules! ident {
+    ($t:tt) => {
+        $t
+    };
+}
+
 #[autoimpl(for<'a, T> &'a mut T where T: trait + ?Sized)]
 pub trait BitRead2 {
     fn copy_to(&mut self, mut _n: u64) -> Result<(), core::convert::Infallible> {
         Ok(())
     }
 
+    fn p(&self, ident!(_x): i32);
+
     #[allow(unused_parens)]
     fn fn_with_parens(&self, (_x): i32) {}
+
+    fn fn_with_path(&self, core::any::TypeId { .. }: core::any::TypeId) {}
 }
 
 #[autoimpl(for<'a, T> &'a T, &'a mut T, Box<T> where T: trait + ?Sized)]
