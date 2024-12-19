@@ -45,6 +45,9 @@ pub trait BitRead2 {
     fn copy_to(&mut self, mut _n: u64) -> Result<(), core::convert::Infallible> {
         Ok(())
     }
+
+    #[allow(unused_parens)]
+    fn fn_with_parens(&self, (_x): i32) {}
 }
 
 #[autoimpl(for<'a, T> &'a T, &'a mut T, Box<T> where T: trait + ?Sized)]

@@ -233,23 +233,44 @@ impl ForDeref {
                                 for attr in &arg.attrs {
                                     attr.to_tokens(&mut toks);
                                 }
-                                match &*arg.pat {
-                                    Pat::Ident(syn::PatIdent {
-                                        attrs,
-                                        ident,
-                                        subpat,
-                                        ..
-                                    }) => {
-                                        for attr in attrs {
-                                            attr.to_tokens(&mut toks);
+
+                                fn process_pat(
+                                    pat: &Pat,
+                                    toks: &mut TokenStream,
+                                ) -> Result<(), ()> {
+                                    match pat {
+                                        Pat::Ident(syn::PatIdent {
+                                            attrs,
+                                            ident,
+                                            subpat,
+                                            ..
+                                        }) => {
+                                            for attr in attrs {
+                                                attr.to_tokens(toks);
+                                            }
+                                            ident.to_tokens(toks);
+                                            assert!(subpat.is_none());
+                                            Ok(())
                                         }
-                                        ident.to_tokens(&mut toks);
-                                        assert!(subpat.is_none());
+                                        Pat::Paren(syn::PatParen { attrs, pat, .. }) => {
+                                            for attr in attrs {
+                                                attr.to_tokens(toks);
+                                            }
+                                            process_pat(pat, toks)
+                                        }
+                                        other => {
+                                            // NOTE: macros are legal in this position but cannot be reliably handled
+                                            emit_error!(
+                                                other,
+                                                "not supported by #[autoimpl(for<...> ...)]"
+                                            );
+                                            Err(())
+                                        }
                                     }
-                                    other => {
-                                        emit_error!(other, "not supported by #[autoimpl(for<...> ...)]");
-                                        return TokenStream::new();
-                                    }
+                                }
+
+                                if let Err(()) = process_pat(&arg.pat, &mut toks) {
+                                    return TokenStream::new();
                                 }
                             }
                         };
