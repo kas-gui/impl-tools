@@ -92,6 +92,13 @@ mod parsing {
     }
 }
 
+// HACK: there is no definitive determination of which attributes should be
+// emitted on the generated impl fn items. We use a whitelist.
+fn propegate_attr_to_impl(attr: &syn::Attribute) -> bool {
+    let path = attr.path().to_token_stream().to_string();
+    matches!(path.as_str(), "cfg" | "allow" | "warn" | "deny" | "forbid")
+}
+
 fn has_bound_on_self(gen: &syn::Generics) -> bool {
     if let Some(ref clause) = gen.where_clause {
         for pred in clause.predicates.iter() {
@@ -176,7 +183,7 @@ impl ForDeref {
                 }
                 TraitItem::Fn(item) => {
                     for attr in item.attrs.iter() {
-                        if *attr.path() == parse_quote! { cfg } {
+                        if propegate_attr_to_impl(attr) {
                             attr.to_tokens(tokens);
                         }
                     }
@@ -225,13 +232,17 @@ impl ForDeref {
                         match arg {
                             FnArg::Receiver(arg) => {
                                 for attr in &arg.attrs {
-                                    attr.to_tokens(&mut toks);
+                                    if propegate_attr_to_impl(&attr) {
+                                        attr.to_tokens(&mut toks);
+                                    }
                                 }
                                 arg.self_token.to_tokens(&mut toks);
                             }
                             FnArg::Typed(arg) => {
                                 for attr in &arg.attrs {
-                                    attr.to_tokens(&mut toks);
+                                    if propegate_attr_to_impl(&attr) {
+                                        attr.to_tokens(&mut toks);
+                                    };
                                 }
 
                                 fn process_pat(
