@@ -40,6 +40,13 @@ fn z() {
     impls_z(Box::new(()));
 }
 
+#[autoimpl(for<'a, T> &'a mut T where T: trait + ?Sized)]
+pub trait BitRead2 {
+    fn copy_to(&mut self, mut _n: u64) -> Result<(), core::convert::Infallible> {
+        Ok(())
+    }
+}
+
 #[autoimpl(for<'a, T> &'a T, &'a mut T, Box<T> where T: trait + ?Sized)]
 trait G<V>
 where
