@@ -12,7 +12,7 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Comma, Eq, PathSep};
-use syn::{parse_quote, FnArg, Ident, Item, Token, TraitItem, Type, TypePath};
+use syn::{parse_quote, FnArg, Ident, Item, Pat, Token, TraitItem, Type, TypePath};
 
 /// Autoimpl for types supporting `Deref`
 pub struct ForDeref {
@@ -92,6 +92,13 @@ mod parsing {
     }
 }
 
+// HACK: there is no definitive determination of which attributes should be
+// emitted on the generated impl fn items. We use a whitelist.
+fn propegate_attr_to_impl(attr: &syn::Attribute) -> bool {
+    let path = attr.path().to_token_stream().to_string();
+    matches!(path.as_str(), "cfg" | "allow" | "warn" | "deny" | "forbid")
+}
+
 fn has_bound_on_self(gen: &syn::Generics) -> bool {
     if let Some(ref clause) = gen.where_clause {
         for pred in clause.predicates.iter() {
@@ -153,7 +160,7 @@ impl ForDeref {
         // Tokenize, like ToTokens impls for syn::TraitItem*, but for definition
         let mut impl_items = TokenStream::new();
         let tokens = &mut impl_items;
-        for item in &trait_def.items {
+        for item in trait_def.items.into_iter() {
             match item {
                 TraitItem::Const(item) => {
                     for attr in item.attrs.iter() {
@@ -174,9 +181,9 @@ impl ForDeref {
 
                     item.semi_token.to_tokens(tokens);
                 }
-                TraitItem::Fn(item) => {
+                TraitItem::Fn(mut item) => {
                     for attr in item.attrs.iter() {
-                        if *attr.path() == parse_quote! { cfg } {
+                        if propegate_attr_to_impl(attr) {
                             attr.to_tokens(tokens);
                         }
                     }
@@ -196,6 +203,27 @@ impl ForDeref {
                         continue;
                     }
 
+                    for (i, arg) in item.sig.inputs.iter_mut().enumerate() {
+                        if let FnArg::Typed(ref mut ty) = arg {
+                            if let Pat::Ident(pat) = &mut *ty.pat {
+                                // We can keep the ident but must not use `ref` / `mut` modifiers
+                                pat.by_ref = None;
+                                pat.mutability = None;
+                                assert_eq!(pat.subpat, None);
+                            } else {
+                                // Substitute a fresh ident
+                                let name = format!("arg{i}");
+                                let ident = Ident::new(&name, Span::call_site());
+                                ty.pat = Box::new(Pat::Ident(syn::PatIdent {
+                                    attrs: vec![],
+                                    by_ref: None,
+                                    mutability: None,
+                                    ident,
+                                    subpat: None,
+                                }));
+                            }
+                        }
+                    }
                     item.sig.to_tokens(tokens);
 
                     bound = bound.max(match item.sig.inputs.first() {
@@ -220,9 +248,28 @@ impl ForDeref {
                     });
 
                     let ident = &item.sig.ident;
-                    let params = item.sig.inputs.iter().map(|arg| match arg {
-                        FnArg::Receiver(arg) => &arg.self_token as &dyn ToTokens,
-                        FnArg::Typed(arg) => &arg.pat,
+                    let params = item.sig.inputs.iter().map(|arg| {
+                        let mut toks = TokenStream::new();
+                        match arg {
+                            FnArg::Receiver(arg) => {
+                                for attr in &arg.attrs {
+                                    if propegate_attr_to_impl(&attr) {
+                                        attr.to_tokens(&mut toks);
+                                    }
+                                }
+                                arg.self_token.to_tokens(&mut toks);
+                            }
+                            FnArg::Typed(arg) => {
+                                for attr in &arg.attrs {
+                                    if propegate_attr_to_impl(&attr) {
+                                        attr.to_tokens(&mut toks);
+                                    };
+                                }
+
+                                arg.pat.to_tokens(&mut toks);
+                            }
+                        };
+                        toks
                     });
                     tokens.append_all(quote! { {
                         #definitive :: #ident ( #(#params),* )
