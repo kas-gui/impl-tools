@@ -12,7 +12,7 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Comma, Eq, PathSep};
-use syn::{parse_quote, FnArg, Ident, Item, Token, TraitItem, Type, TypePath};
+use syn::{parse_quote, FnArg, Ident, Item, Pat, Token, TraitItem, Type, TypePath};
 
 /// Autoimpl for types supporting `Deref`
 pub struct ForDeref {
@@ -220,9 +220,40 @@ impl ForDeref {
                     });
 
                     let ident = &item.sig.ident;
-                    let params = item.sig.inputs.iter().map(|arg| match arg {
-                        FnArg::Receiver(arg) => &arg.self_token as &dyn ToTokens,
-                        FnArg::Typed(arg) => &arg.pat,
+                    let params = item.sig.inputs.iter().map(|arg| {
+                        let mut toks = TokenStream::new();
+                        match arg {
+                            FnArg::Receiver(arg) => {
+                                for attr in &arg.attrs {
+                                    attr.to_tokens(&mut toks);
+                                }
+                                arg.self_token.to_tokens(&mut toks);
+                            }
+                            FnArg::Typed(arg) => {
+                                for attr in &arg.attrs {
+                                    attr.to_tokens(&mut toks);
+                                }
+                                match &*arg.pat {
+                                    Pat::Ident(syn::PatIdent {
+                                        attrs,
+                                        ident,
+                                        subpat,
+                                        ..
+                                    }) => {
+                                        for attr in attrs {
+                                            attr.to_tokens(&mut toks);
+                                        }
+                                        ident.to_tokens(&mut toks);
+                                        assert!(subpat.is_none());
+                                    }
+                                    other => {
+                                        emit_error!(other, "not supported by #[autoimpl(for<...> ...)]");
+                                        return TokenStream::new();
+                                    }
+                                }
+                            }
+                        };
+                        toks
                     });
                     tokens.append_all(quote! { {
                         #definitive :: #ident ( #(#params),* )
