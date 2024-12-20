@@ -9,29 +9,31 @@
 
 //! # Impl-tools
 //!
-//! `#[autoimpl]` is a partial replacement for `#[derive]`, supporting:
+//! [`#[autoimpl]`](macro@autoimpl) is a partial replacement for
+//! [`#[derive]`](https://doc.rust-lang.org/stable/reference/attributes/derive.html),
+//! supporting:
 //!
 //! -   Explicit `where` clause on generic parameters
 //! -   No implicit bounds on generic parameters beyond those required by the type
 //! -   Traits like `Deref` by `using` a named field
 //! -   Traits like `Debug` may `ignore` named fields
 //!
-//! `#[autoimpl]` may also be used on trait definitions to *re-implement* the
+//! [`#[autoimpl]`](macro@autoimpl) may also be used on trait definitions to *re-implement* the
 //! trait for given reference types.
 //!
-//! `impl_scope!` is a function-like macro used to define a type plus its
+//! [`impl_scope!`] is a function-like macro used to define a type plus its
 //! implementations. It supports two things:
 //!
 //! -   `impl Self` syntax
 //! -   Evaluation of advanced attribute macros, which may use field
 //!     initializers and read/write other impls within the scope
 //!
-//! `impl_anon!` is a function-like macro used to define and instantiate a
-//! unique (single-use) type. It supports everything supported by `impl_scope!`
+//! [`impl_anon!`] is a function-like macro used to define and instantiate a
+//! unique (single-use) type. It supports everything supported by [`impl_scope!`]
 //! plus field initializers and (limited) automatic typing of fields.
 //!
-//! User-extensions to both `#[autoimpl]` and `impl_scope!` are possible, by
-//! writing your own proc-macro crate depending on
+//! User-extensions to both [`#[autoimpl]`](macro@autoimpl) and [`impl_scope!`]
+//! are possible, by writing your own proc-macro crate depending on
 //! [impl-tools-lib](https://crates.io/crates/impl-tools-lib).
 
 #[cfg(doctest)]
