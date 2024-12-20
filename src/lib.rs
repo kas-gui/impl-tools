@@ -9,29 +9,25 @@
 
 //! # Impl-tools
 //!
-//! `#[autoimpl]` is a partial replacement for `#[derive]`, supporting:
+//! [`#[autoimpl]`](macro@autoimpl) is an alternative to
+//! [`#[derive]`](macro@derive) with more features (also usable on traits).
 //!
-//! -   Explicit `where` clause on generic parameters
-//! -   No implicit bounds on generic parameters beyond those required by the type
-//! -   Traits like `Deref` by `using` a named field
-//! -   Traits like `Debug` may `ignore` named fields
+//! [`#[impl_default]`](macro@impl_default) is shorthand for implementing
+//! [`Default`] with an explicit default value.
+//! It supports structs and enums.
 //!
-//! `#[autoimpl]` may also be used on trait definitions to *re-implement* the
-//! trait for given reference types.
+//! [`impl_scope!`] is a function-like macro used to define a type together with
+//! its implementations. This allows:
 //!
-//! `impl_scope!` is a function-like macro used to define a type plus its
-//! implementations. It supports two things:
+//! -   `impl Self` syntax (avoid repeated definitions of generics)
+//! -   Evaluation of some more complex attribute macros
 //!
-//! -   `impl Self` syntax
-//! -   Evaluation of advanced attribute macros, which may use field
-//!     initializers and read/write other impls within the scope
-//!
-//! `impl_anon!` is a function-like macro used to define and instantiate a
-//! unique (single-use) type. It supports everything supported by `impl_scope!`
+//! [`impl_anon!`] is a function-like macro used to define and instantiate a
+//! unique (single-use) type. It supports everything supported by [`impl_scope!`]
 //! plus field initializers and (limited) automatic typing of fields.
 //!
-//! User-extensions to both `#[autoimpl]` and `impl_scope!` are possible, by
-//! writing your own proc-macro crate depending on
+//! User-extensions to both [`#[autoimpl]`](macro@autoimpl) and [`impl_scope!`]
+//! are possible with a custom proc-macro crate depending on
 //! [impl-tools-lib](https://crates.io/crates/impl-tools-lib).
 
 #[cfg(doctest)]
@@ -46,7 +42,7 @@ use syn::parse_macro_input;
 
 use impl_tools_lib::{self as lib, autoimpl};
 
-/// Impl `Default` with given field or type initializers
+/// Impl [`Default`] with given field or type initializers
 ///
 /// This macro may be used in one of two ways.
 ///
@@ -110,20 +106,55 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
     toks
 }
 
-/// An alternative to the standard `derive` macro
+/// An alternative to the standard [`macro@derive`] macro
 ///
-/// `#[autoimpl]` may be used in two ways:
+/// This macro may be used:
 ///
-/// -   [On a type definition](#on-type-definitions), to implement a specified trait (like `#[derive]`)
+/// -   [On a type definition](#on-type-definitions), to implement a specified trait
 /// -   [On a trait definition](#on-trait-definitions), to implement the trait for specified types
 ///     supporting [`Deref`]
 ///
-/// If using `autoimpl` **and** `derive` macros with Rust < 1.57.0, the
-/// `autoimpl` attribute must come first (see rust#81119).
-///
-/// [`proc_macro_derive`]: https://doc.rust-lang.org/reference/procedural-macros.html#derive-macros
-///
 /// # On type definitions
+///
+/// `#[autoimpl]` on type definitions functions similarly to [`#[derive]`](macro@derive). The differences are as follows.
+///
+/// There is no implied bound on generic parameters. Instead, bounds must be specified explicitly, using syntax like `where T: Clone`. The special syntax `where T: trait` may be used where `trait` desugars to the target trait for each implementation. An example:
+/// ```
+/// # use impl_tools::autoimpl;
+/// #[autoimpl(Clone, Debug where T: trait)]
+/// struct Wrapper<T>(pub T);
+/// ```
+///
+/// ### `ignore`
+///
+/// Traits like [`Debug`] may be implemented while `ignore`-ing some fields, for example:
+/// ```
+/// # use impl_tools::autoimpl;
+/// #[autoimpl(Debug ignore self.f)]
+/// struct PairWithFn<T> {
+///     x: f32,
+///     y: f32,
+///     f: fn(&T),
+/// }
+/// ```
+///
+/// ### `using`
+///
+/// Traits like [`Deref`] may be implemented by `using` a named field, for example:
+/// ```
+/// # use impl_tools::autoimpl;
+/// #[autoimpl(Deref, DerefMut using self.1)]
+/// struct AnnotatedWrapper<T>(String, T);
+/// ```
+/// In the above example, [`Deref::Target`] will be implemented as `T` (the type
+/// of the field `self.1`). The `Target` type may instead be specified explicitly:
+/// ```
+/// # use impl_tools::autoimpl;
+/// #[autoimpl(Deref<Target = T> using self.0)]
+/// struct MyBoxingWrapper<T: ?Sized>(Box<T>);
+/// ```
+///
+/// ## Supported traits
 ///
 /// | Path | *ignore* | *using* | *notes* |
 /// |----- |--- |--- |--- |
@@ -143,7 +174,7 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 /// | [`::core::ops::Deref`] | - | deref target | See [`Deref::Target` type](#dereftarget-type) below |
 /// | [`::core::ops::DerefMut`] | - | deref target | |
 ///
-/// Traits are matched from the path, as follows:
+/// Traits are matched using the path, as follows:
 ///
 /// -   Only the last component, e.g. `#[autoimpl(Clone)]`
 /// -   The full path with leading `::`, e.g. `#[autoimpl(::core::clone::Clone)]`
@@ -151,17 +182,7 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 /// -   The full path with/without leading `::`, using `std` instead of `core` or `alloc`,
 ///     e.g. `#[autoimpl(std::clone::Clone)]`
 ///
-/// *Ignore:* some trait implementations supports ignoring listed fields.
-/// For example, `#[autoimpl(PartialEq ignore self.foo)]` will implement
-/// `PartialEq`, comparing all fields except `foo`.
-/// Note: `Copy` and `Eq` do not *use* `ignore`, but tolerate its usage by a
-/// companion trait (e.g. `#[autoimpl(PartialEq, Eq ignore self.a)]`).
-///
-/// *Using:* some trait implementations require a named field to "use".
-/// For example, `#[autoimpl(Deref using self.foo)]` implements [`Deref`] to
-/// return a reference to field `self.foo`.
-///
-/// ### Parameter syntax
+/// ## Parameter syntax
 ///
 /// > _ParamsMulti_ :\
 /// > &nbsp;&nbsp; ( _Trait_ ),+ _Using_? _Ignores_? _WhereClause_?
@@ -177,99 +198,21 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// **Targets:** each *Trait* listed is implemented for the annotated type.
 ///
-/// ### Generics and where clause
-///
-/// Type generics are inherited from the type definition. Bounds defined by the
-/// type are inherited, but unlike `#[derive]` no additional bounds for the
-/// trait being implemented are assumed.
-///
-/// A `where` clause, e.g. `where T: Foo`, may be used.
-/// A special bound syntax, `T: trait`, indicates that `T` must support the
-/// trait being implemented.
-///
-/// ### `Deref::Target` type
-///
-/// The [`Deref`] trait has two members:
-///
-/// - `type Target: ?Sized`
-/// - `fn deref(&self) -> &Self::Target`
-///
-/// `#[autoimpl(Deref using self.x)]` implements `Deref` as follows:
-///
-/// - `type Target = X` where field `x` has type `X`
-/// - `fn deref(&self) -> &Self::Target { &self.x }`
-///
-/// For some uses this is fine, but in other cases a different `Target` type is
-/// preferred. To achieve this, `Target` may be given explicitly:
-///
-/// ```
-/// # use impl_tools::autoimpl;
-/// #[autoimpl(Deref<Target = T> using self.0)]
-/// struct MyBoxingWrapper<T: ?Sized>(Box<T>);
-/// ```
-///
-/// ### Examples
-///
-/// Implement `std::fmt::Debug`, ignoring the last field:
-/// ```
-/// # use impl_tools::autoimpl;
-/// #[autoimpl(Debug ignore self.f)]
-/// struct PairWithFn<T> {
-///     x: f32,
-///     y: f32,
-///     f: fn(&T),
-/// }
-/// ```
-///
-/// Implement `Clone` and `Debug` on a wrapper, with the required bounds:
-/// ```
-/// # use impl_tools::autoimpl;
-/// #[autoimpl(Clone, Debug where T: trait)]
-/// struct Wrapper<T>(pub T);
-/// ```
-///
-/// Implement `Deref` and `DerefMut`, dereferencing to the given field:
-/// ```
-/// # use impl_tools::autoimpl;
-/// #[autoimpl(Deref, DerefMut using self.1)]
-/// struct AnnotatedWrapper<T>(String, T);
-/// ```
 ///
 /// # On trait definitions
 ///
-/// User-defined traits may be implemented over any type supporting `Deref`
-/// (and if required `DerefMut`) to another type supporting the trait.
+/// `#[autoimpl]` on trait definitions generates an implementation of that trait
+/// for the given targets. This functions using an implementation of [`Deref`]
+/// (and, where required, [`DerefMut`]) to lower the target type to some other
+/// type supporting the trait. We call this latter type the **definitive type**.
 ///
-/// ### Parameter syntax
+/// It is required that the target type(s) implemented are generic over some
+/// type parameter(s). These generic parameters are introduced using `for<..>`.
+/// It is further required that at least one generic parameter has a bound on
+/// `trait`; the first such parameter is inferred to be the *definitive type*.
 ///
-/// > _ParamsTrait_ :\
-/// > &nbsp;&nbsp; `for` _Generics_ ( _Type_ ),+ _WhereClause_?
-///
-/// **Targets:** the annotated trait is implemented for each *Type* listed.
-///
-/// **Definitive type:**
-/// It is required that some generic type parameter has bound `trait`
-/// (e.g. `T: trait`). The first such parameter is designated the *definitive type*.
-///
-/// ### Trait items
-///
-/// Assuming definitive type `T`, trait items are implemented as follows:
-///
-/// -   associated constant `const C`: `const C = T::C;`
-/// -   associated type `type X`: `type X = T::X;`
-/// -   method `fn foo(a: A, b: B)`: `T::foo(a, b)`
-/// -   (unexpanded) macro items: not supported
-///
-/// Generics and where clauses on types and methods are supported.
-///
-/// Items with a where clause with a type bound on `Self` are not supported
-/// since the item is not guaranteed to exist on the definitive type.
-/// Exception: methods with a default implementation (in this case the item is
-/// skipped).
-///
-/// ### Examples
-///
-/// Implement `MyTrait` for `&T`, `&mut T` and `Box<dyn MyTrait>`:
+/// For example, the following usage implements `MyTrait` for targets `&T`,
+/// `&mut T` and `Box<dyn MyTrait>` using definitive type `T`:
 /// ```
 /// # use impl_tools::autoimpl;
 /// #[autoimpl(for<T: trait + ?Sized> &T, &mut T, Box<T>)]
@@ -277,13 +220,57 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 ///     fn f(&self) -> String;
 /// }
 /// ```
-/// The definitive type is `T`. For example, here, `f` is implemented with the
-/// body `<T as MyTrait>::f(self)`.
+/// The expansion for target `Box<T>` looks like:
+/// ```
+/// # trait MyTrait {
+/// #     fn f(&self) -> String;
+/// # }
+/// #[automatically_derived]
+/// impl<T: MyTrait + ?Sized> MyTrait for Box<T> {
+///     fn f(&self) -> String {
+///         <T as MyTrait>::f(self)
+///     }
+/// }
+/// ```
 ///
-/// Note further: if the trait uses generic parameters itself, these must be
-/// introduced explicitly in the `for<..>` parameter list.
+/// ## Generics
+///
+/// Traits using generics and trait items using generics are, for the most part,
+/// supported.
+///
+/// Items with a where clause with a type bound on `Self` are not supported
+/// since the item is not guaranteed to exist on the definitive type.
+/// Exception: methods with a default implementation (in this case the item is
+/// skipped).
+///
+/// An example:
+/// ```
+/// # use impl_tools::autoimpl;
+/// # use std::fmt::Debug;
+/// #[autoimpl(for<'a, T> &'a T, &'a mut T, Box<T> where T: trait + ?Sized)]
+/// trait G<V>
+/// where
+///     V: Debug,
+/// {
+///     fn g(&self) -> V;
+///
+///     fn s<X>(&self, f: impl Fn(V) -> X) -> X
+///     where
+///         Self: Sized,
+///     {
+///         f(self.g())
+///     }
+/// }
+/// ```
+///
+/// ## Parameter syntax
+///
+/// > _ParamsTrait_ :\
+/// > &nbsp;&nbsp; `for` _Generics_ ( _Type_ ),+ _WhereClause_?
 ///
 /// [`Deref`]: std::ops::Deref
+/// [`Deref::Target`]: std::ops::Deref::Target
+/// [`DerefMut`]: std::ops::DerefMut
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
