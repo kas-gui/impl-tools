@@ -42,7 +42,7 @@ use syn::parse_macro_input;
 
 use impl_tools_lib::{self as lib, autoimpl};
 
-/// Impl `Default` with given field or type initializers
+/// Impl [`Default`] with given field or type initializers
 ///
 /// This macro may be used in one of two ways.
 ///
@@ -106,20 +106,55 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
     toks
 }
 
-/// An alternative to the standard `derive` macro
+/// An alternative to the standard [`macro@derive`] macro
 ///
-/// `#[autoimpl]` may be used in two ways:
+/// This macro may be used:
 ///
-/// -   [On a type definition](#on-type-definitions), to implement a specified trait (like `#[derive]`)
+/// -   [On a type definition](#on-type-definitions), to implement a specified trait
 /// -   [On a trait definition](#on-trait-definitions), to implement the trait for specified types
 ///     supporting [`Deref`]
 ///
-/// If using `autoimpl` **and** `derive` macros with Rust < 1.57.0, the
-/// `autoimpl` attribute must come first (see rust#81119).
-///
-/// [`proc_macro_derive`]: https://doc.rust-lang.org/reference/procedural-macros.html#derive-macros
-///
 /// # On type definitions
+///
+/// `#[autoimpl]` on type definitions functions similarly to [`#[derive]`](macro@derive). The differences are as follows.
+///
+/// There is no implied bound on generic parameters. Instead, bounds must be specified explicitly, using syntax like `where T: Clone`. The special syntax `where T: trait` may be used where `trait` desugars to the target trait for each implementation. An example:
+/// ```
+/// # use impl_tools::autoimpl;
+/// #[autoimpl(Clone, Debug where T: trait)]
+/// struct Wrapper<T>(pub T);
+/// ```
+///
+/// ### `ignore`
+///
+/// Traits like [`Debug`] may be implemented while `ignore`-ing some fields, for example:
+/// ```
+/// # use impl_tools::autoimpl;
+/// #[autoimpl(Debug ignore self.f)]
+/// struct PairWithFn<T> {
+///     x: f32,
+///     y: f32,
+///     f: fn(&T),
+/// }
+/// ```
+///
+/// ### `using`
+///
+/// Traits like [`Deref`] may be implemented by `using` a named field, for example:
+/// ```
+/// # use impl_tools::autoimpl;
+/// #[autoimpl(Deref, DerefMut using self.1)]
+/// struct AnnotatedWrapper<T>(String, T);
+/// ```
+/// In the above example, [`Deref::Target`] will be implemented as `T` (the type
+/// of the field `self.1`). The `Target` type may instead be specified explicitly:
+/// ```
+/// # use impl_tools::autoimpl;
+/// #[autoimpl(Deref<Target = T> using self.0)]
+/// struct MyBoxingWrapper<T: ?Sized>(Box<T>);
+/// ```
+///
+/// ## Supported traits
 ///
 /// | Path | *ignore* | *using* | *notes* |
 /// |----- |--- |--- |--- |
@@ -139,7 +174,7 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 /// | [`::core::ops::Deref`] | - | deref target | See [`Deref::Target` type](#dereftarget-type) below |
 /// | [`::core::ops::DerefMut`] | - | deref target | |
 ///
-/// Traits are matched from the path, as follows:
+/// Traits are matched using the path, as follows:
 ///
 /// -   Only the last component, e.g. `#[autoimpl(Clone)]`
 /// -   The full path with leading `::`, e.g. `#[autoimpl(::core::clone::Clone)]`
@@ -147,17 +182,7 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 /// -   The full path with/without leading `::`, using `std` instead of `core` or `alloc`,
 ///     e.g. `#[autoimpl(std::clone::Clone)]`
 ///
-/// *Ignore:* some trait implementations supports ignoring listed fields.
-/// For example, `#[autoimpl(PartialEq ignore self.foo)]` will implement
-/// `PartialEq`, comparing all fields except `foo`.
-/// Note: `Copy` and `Eq` do not *use* `ignore`, but tolerate its usage by a
-/// companion trait (e.g. `#[autoimpl(PartialEq, Eq ignore self.a)]`).
-///
-/// *Using:* some trait implementations require a named field to "use".
-/// For example, `#[autoimpl(Deref using self.foo)]` implements [`Deref`] to
-/// return a reference to field `self.foo`.
-///
-/// ### Parameter syntax
+/// ## Parameter syntax
 ///
 /// > _ParamsMulti_ :\
 /// > &nbsp;&nbsp; ( _Trait_ ),+ _Using_? _Ignores_? _WhereClause_?
@@ -173,63 +198,6 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// **Targets:** each *Trait* listed is implemented for the annotated type.
 ///
-/// ### Generics and where clause
-///
-/// Type generics are inherited from the type definition. Bounds defined by the
-/// type are inherited, but unlike `#[derive]` no additional bounds for the
-/// trait being implemented are assumed.
-///
-/// A `where` clause, e.g. `where T: Foo`, may be used.
-/// A special bound syntax, `T: trait`, indicates that `T` must support the
-/// trait being implemented.
-///
-/// ### `Deref::Target` type
-///
-/// The [`Deref`] trait has two members:
-///
-/// - `type Target: ?Sized`
-/// - `fn deref(&self) -> &Self::Target`
-///
-/// `#[autoimpl(Deref using self.x)]` implements `Deref` as follows:
-///
-/// - `type Target = X` where field `x` has type `X`
-/// - `fn deref(&self) -> &Self::Target { &self.x }`
-///
-/// For some uses this is fine, but in other cases a different `Target` type is
-/// preferred. To achieve this, `Target` may be given explicitly:
-///
-/// ```
-/// # use impl_tools::autoimpl;
-/// #[autoimpl(Deref<Target = T> using self.0)]
-/// struct MyBoxingWrapper<T: ?Sized>(Box<T>);
-/// ```
-///
-/// ### Examples
-///
-/// Implement `std::fmt::Debug`, ignoring the last field:
-/// ```
-/// # use impl_tools::autoimpl;
-/// #[autoimpl(Debug ignore self.f)]
-/// struct PairWithFn<T> {
-///     x: f32,
-///     y: f32,
-///     f: fn(&T),
-/// }
-/// ```
-///
-/// Implement `Clone` and `Debug` on a wrapper, with the required bounds:
-/// ```
-/// # use impl_tools::autoimpl;
-/// #[autoimpl(Clone, Debug where T: trait)]
-/// struct Wrapper<T>(pub T);
-/// ```
-///
-/// Implement `Deref` and `DerefMut`, dereferencing to the given field:
-/// ```
-/// # use impl_tools::autoimpl;
-/// #[autoimpl(Deref, DerefMut using self.1)]
-/// struct AnnotatedWrapper<T>(String, T);
-/// ```
 ///
 /// # On trait definitions
 ///
@@ -280,6 +248,7 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 /// introduced explicitly in the `for<..>` parameter list.
 ///
 /// [`Deref`]: std::ops::Deref
+/// [`Deref::Target`]: std::ops::Deref::Target
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
