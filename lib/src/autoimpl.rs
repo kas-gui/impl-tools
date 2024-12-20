@@ -188,7 +188,7 @@ pub enum Error {
 }
 
 impl Error {
-    /// Report via [`proc_macro_error::emit_error`].
+    /// Report via [`proc_macro_error2::emit_error`].
     pub fn emit(self, target: Span, path_args: Span) {
         match self {
             Error::RequireUsing => {
@@ -293,7 +293,7 @@ impl ImplTraits {
     /// This attribute does not modify the item.
     /// The caller should append the result to `item` tokens.
     ///
-    /// Errors are reported via [`proc_macro_error::emit_error`].
+    /// Errors are reported via [`proc_macro_error2::emit_error`].
     pub fn expand(
         self,
         item: Toks,
