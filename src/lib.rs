@@ -201,39 +201,18 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # On trait definitions
 ///
-/// User-defined traits may be implemented over any type supporting `Deref`
-/// (and if required `DerefMut`) to another type supporting the trait.
+/// `#[autoimpl]` on trait definitions generates an implementation of that trait
+/// for the given targets. This functions using an implementation of [`Deref`]
+/// (and, where required, [`DerefMut`]) to lower the target type to some other
+/// type supporting the trait. We call this latter type the **definitive type**.
 ///
-/// ### Parameter syntax
+/// It is required that the target type(s) implemented are generic over some
+/// type parameter(s). These generic parameters are introduced using `for<..>`.
+/// It is further required that at least one generic parameter has a bound on
+/// `trait`; the first such parameter is inferred to be the *definitive type*.
 ///
-/// > _ParamsTrait_ :\
-/// > &nbsp;&nbsp; `for` _Generics_ ( _Type_ ),+ _WhereClause_?
-///
-/// **Targets:** the annotated trait is implemented for each *Type* listed.
-///
-/// **Definitive type:**
-/// It is required that some generic type parameter has bound `trait`
-/// (e.g. `T: trait`). The first such parameter is designated the *definitive type*.
-///
-/// ### Trait items
-///
-/// Assuming definitive type `T`, trait items are implemented as follows:
-///
-/// -   associated constant `const C`: `const C = T::C;`
-/// -   associated type `type X`: `type X = T::X;`
-/// -   method `fn foo(a: A, b: B)`: `T::foo(a, b)`
-/// -   (unexpanded) macro items: not supported
-///
-/// Generics and where clauses on types and methods are supported.
-///
-/// Items with a where clause with a type bound on `Self` are not supported
-/// since the item is not guaranteed to exist on the definitive type.
-/// Exception: methods with a default implementation (in this case the item is
-/// skipped).
-///
-/// ### Examples
-///
-/// Implement `MyTrait` for `&T`, `&mut T` and `Box<dyn MyTrait>`:
+/// For example, the following usage implements `MyTrait` for targets `&T`,
+/// `&mut T` and `Box<dyn MyTrait>` using definitive type `T`:
 /// ```
 /// # use impl_tools::autoimpl;
 /// #[autoimpl(for<T: trait + ?Sized> &T, &mut T, Box<T>)]
@@ -241,14 +220,57 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 ///     fn f(&self) -> String;
 /// }
 /// ```
-/// The definitive type is `T`. For example, here, `f` is implemented with the
-/// body `<T as MyTrait>::f(self)`.
+/// The expansion for target `Box<T>` looks like:
+/// ```
+/// # trait MyTrait {
+/// #     fn f(&self) -> String;
+/// # }
+/// #[automatically_derived]
+/// impl<T: MyTrait + ?Sized> MyTrait for Box<T> {
+///     fn f(&self) -> String {
+///         <T as MyTrait>::f(self)
+///     }
+/// }
+/// ```
 ///
-/// Note further: if the trait uses generic parameters itself, these must be
-/// introduced explicitly in the `for<..>` parameter list.
+/// ## Generics
+///
+/// Traits using generics and trait items using generics are, for the most part,
+/// supported.
+///
+/// Items with a where clause with a type bound on `Self` are not supported
+/// since the item is not guaranteed to exist on the definitive type.
+/// Exception: methods with a default implementation (in this case the item is
+/// skipped).
+///
+/// An example:
+/// ```
+/// # use impl_tools::autoimpl;
+/// # use std::fmt::Debug;
+/// #[autoimpl(for<'a, T> &'a T, &'a mut T, Box<T> where T: trait + ?Sized)]
+/// trait G<V>
+/// where
+///     V: Debug,
+/// {
+///     fn g(&self) -> V;
+///
+///     fn s<X>(&self, f: impl Fn(V) -> X) -> X
+///     where
+///         Self: Sized,
+///     {
+///         f(self.g())
+///     }
+/// }
+/// ```
+///
+/// ## Parameter syntax
+///
+/// > _ParamsTrait_ :\
+/// > &nbsp;&nbsp; `for` _Generics_ ( _Type_ ),+ _WhereClause_?
 ///
 /// [`Deref`]: std::ops::Deref
 /// [`Deref::Target`]: std::ops::Deref::Target
+/// [`DerefMut`]: std::ops::DerefMut
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
