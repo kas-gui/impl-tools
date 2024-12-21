@@ -216,10 +216,10 @@ impl ForDeref {
                         }
                     }
 
-                    if has_bound_on_self(&item.sig.generics) {
-                        // If the method has a bound on Self, we cannot use a dereferencing
-                        // implementation since the definitive type is not guaranteed to match
-                        // the bound (we also cannot add a bound).
+                    if !self.definitive_has_sized_bound && has_bound_on_self(&item.sig.generics) {
+                        // If the method has a bound on Self without the definitive type having a
+                        // bound on Self we cannot use a dereferencing implementation since the
+                        // definitive type is not guaranteed to match the bound.
 
                         if item.default.is_none() {
                             emit_call_site_error!(
