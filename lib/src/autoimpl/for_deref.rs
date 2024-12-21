@@ -18,6 +18,7 @@ use syn::{parse_quote, FnArg, Ident, Item, Pat, Token, TraitItem, Type, TypePath
 pub struct ForDeref {
     generics: Generics,
     definitive: Ident,
+    definitive_has_sized_bound: bool,
     targets: Punctuated<Type, Comma>,
 }
 
@@ -43,33 +44,59 @@ mod parsing {
             }
 
             let mut definitive: Option<Ident> = None;
+            let mut definitive_has_sized_bound = false;
             for param in &generics.params {
                 if let GenericParam::Type(param) = param {
+                    let mut is_definitive = false;
+                    let mut explicit_sized = false;
+                    let mut explicit_unsized = false;
+
                     for bound in &param.bounds {
                         if matches!(bound, TypeParamBound::TraitSubst(_)) {
-                            definitive = Some(param.ident.clone());
-                            break;
+                            is_definitive = true;
+                        } else if let TypeParamBound::Other(syn::TypeParamBound::Trait(ref bound)) =
+                            *bound
+                        {
+                            if *bound == parse_quote! { Sized } {
+                                explicit_sized = true;
+                            } else if *bound == parse_quote! { ?Sized } {
+                                explicit_unsized = true;
+                            }
                         }
                     }
-                }
-            }
-            if definitive.is_none() {
-                if let Some(clause) = generics.where_clause.as_ref() {
-                    for pred in &clause.predicates {
-                        if let WherePredicate::Type(pred) = pred {
-                            for bound in &pred.bounds {
-                                if matches!(bound, TypeParamBound::TraitSubst(_)) {
-                                    if let Type::Path(TypePath { qself: None, path }) =
-                                        &pred.bounded_ty
+
+                    if let Some(clause) = generics.where_clause.as_ref() {
+                        for pred in clause.predicates.iter().filter_map(|pred| match pred {
+                            WherePredicate::Type(ty) => Some(ty),
+                            _ => None,
+                        }) {
+                            if matches!(
+                                &pred.bounded_ty,
+                                Type::Path(TypePath { qself: None, path })
+                                if path.get_ident() == Some(&param.ident)
+                            ) {
+                                for bound in &pred.bounds {
+                                    if matches!(bound, TypeParamBound::TraitSubst(_)) {
+                                        is_definitive = true;
+                                    } else if let TypeParamBound::Other(
+                                        syn::TypeParamBound::Trait(ref bound),
+                                    ) = *bound
                                     {
-                                        if let Some(ident) = path.get_ident() {
-                                            definitive = Some(ident.clone());
-                                            break;
+                                        if *bound == parse_quote! { Sized } {
+                                            explicit_sized = true;
+                                        } else if *bound == parse_quote! { ?Sized } {
+                                            explicit_unsized = true;
                                         }
                                     }
                                 }
                             }
                         }
+                    }
+
+                    if is_definitive {
+                        definitive = Some(param.ident.clone());
+                        definitive_has_sized_bound = explicit_sized || !explicit_unsized;
+                        break;
                     }
                 }
             }
@@ -86,6 +113,7 @@ mod parsing {
             Ok(ForDeref {
                 generics,
                 definitive,
+                definitive_has_sized_bound,
                 targets,
             })
         }
