@@ -238,10 +238,15 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 /// Traits using generics and trait items using generics are, for the most part,
 /// supported.
 ///
-/// Items with a where clause with a type bound on `Self` are not supported
+/// Items with a `where Self: Sized` bound are only supported
+/// when the definitive type is also `Sized`.
 /// since the item is not guaranteed to exist on the definitive type.
 /// Exception: methods with a default implementation (in this case the item is
 /// skipped).
+///
+/// TODO: can we instead add a bound like `Target: Sized`?
+/// A: yes. But: now we should choose whether cases with a default impl should
+/// (a) continue to use the default impl or (b) require the `Target: Sized` bound.
 ///
 /// An example:
 /// ```

@@ -82,6 +82,10 @@ fn g() {
         fn g(&self) -> i32 {
             123
         }
+
+        fn s<X>(&self, f: impl Fn(i32) -> X) -> X {
+            f(self.g())
+        }
     }
 
     fn impls_g(g: impl G<i32>) {
@@ -108,6 +112,11 @@ where
     X: Debug,
 {
 }
+
+// #[autoimpl(for<T: trait + ?Sized> &T)]
+// trait I {
+//     fn f(&self) where Self: Sized;
+// }
 
 #[cfg(rustc_1_65)]
 #[autoimpl(for<A: trait + ?Sized> Box<A>)]

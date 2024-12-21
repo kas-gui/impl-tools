@@ -127,7 +127,14 @@ fn propegate_attr_to_impl(attr: &syn::Attribute) -> bool {
     matches!(path.as_str(), "cfg" | "allow" | "warn" | "deny" | "forbid")
 }
 
-fn has_bound_on_self(gen: &syn::Generics) -> bool {
+fn has_bound_on_self(item: &TraitItem) -> bool {
+    let gen: &syn::Generics = match item {
+        TraitItem::Const(ref item) => &item.generics,
+        TraitItem::Fn(ref item) => &item.sig.generics,
+        TraitItem::Type(ref item) => &item.generics,
+        TraitItem::Macro(_) | TraitItem::Verbatim(_) => return false,
+    };
+
     if let Some(ref clause) = gen.where_clause {
         for pred in clause.predicates.iter() {
             if let syn::WherePredicate::Type(ref ty) = pred {
@@ -189,6 +196,22 @@ impl ForDeref {
         let mut impl_items = TokenStream::new();
         let tokens = &mut impl_items;
         for item in trait_def.items.into_iter() {
+            if !self.definitive_has_sized_bound && has_bound_on_self(&item) {
+                // If the method has a bound on Self without the definitive type having a
+                // bound on Self we cannot use a dereferencing implementation since the
+                // definitive type is not guaranteed to match the bound.
+
+                // if item.default.is_none() {
+                    emit_call_site_error!(
+                        "cannot autoimpl trait with Deref";
+                        note = item.span() => "item has a Self: Sized bound";
+                        note = definitive_ty.span() => "definitive type does not have a Sized bound";
+                    );
+                // }
+
+                continue;
+            }
+
             match item {
                 TraitItem::Const(item) => {
                     for attr in item.attrs.iter() {
@@ -214,21 +237,6 @@ impl ForDeref {
                         if propegate_attr_to_impl(attr) {
                             attr.to_tokens(tokens);
                         }
-                    }
-
-                    if !self.definitive_has_sized_bound && has_bound_on_self(&item.sig.generics) {
-                        // If the method has a bound on Self without the definitive type having a
-                        // bound on Self we cannot use a dereferencing implementation since the
-                        // definitive type is not guaranteed to match the bound.
-
-                        if item.default.is_none() {
-                            emit_call_site_error!(
-                                "cannot autoimpl trait with Deref";
-                                note = item.span() => "method has a bound on Self and no default implementation";
-                            );
-                        }
-
-                        continue;
                     }
 
                     for (i, arg) in item.sig.inputs.iter_mut().enumerate() {
@@ -310,12 +318,12 @@ impl ForDeref {
                         }
                     }
 
-                    if has_bound_on_self(&item.generics) {
-                        emit_call_site_error!(
-                            "cannot autoimpl trait with Deref";
-                            note = item.span() => "type has a bound on Self";
-                        );
-                    }
+                    // if has_bound_on_self(&item.generics) {
+                    //     emit_call_site_error!(
+                    //         "cannot autoimpl trait with Deref";
+                    //         note = item.span() => "type has a bound on Self";
+                    //     );
+                    // }
 
                     item.type_token.to_tokens(tokens);
                     item.ident.to_tokens(tokens);
