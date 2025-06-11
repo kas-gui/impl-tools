@@ -2,6 +2,10 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [Unreleased]
+
+-   Bump MSRV to 1.65 (#51)
+
 ## [0.10.3], [impl-tools-lib-0.11.1] — 2024-12-21
 
 -   Let `#[autoimpl]` on traits support function arguments using `mut` and destructuring patterns (#45)

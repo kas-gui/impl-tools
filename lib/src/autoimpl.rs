@@ -496,7 +496,7 @@ pub struct ImplArgs {
 impl ImplArgs {
     /// If true, this field is ignored
     pub fn ignore(&self, member: &Member) -> bool {
-        self.ignores.iter().any(|ig| *ig == *member)
+        self.ignores.contains(member)
     }
 
     /// If true, this named field is ignored

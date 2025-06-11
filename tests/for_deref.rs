@@ -109,7 +109,6 @@ where
 {
 }
 
-#[cfg(rustc_1_65)]
 #[autoimpl(for<A: trait + ?Sized> Box<A>)]
 trait Gat {
     type T<X>;
@@ -119,7 +118,6 @@ trait Gat {
         X: 'a;
 }
 
-#[cfg(rustc_1_65)]
 #[test]
 fn gat() {
     struct S;

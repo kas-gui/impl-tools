@@ -4,7 +4,6 @@ Impl-tools
 [![Test Status](https://github.com/kas-gui/impl-tools/workflows/Tests/badge.svg?event=push)](https://github.com/kas-gui/impl-tools/actions)
 [![Latest version](https://img.shields.io/crates/v/impl-tools.svg)](https://crates.io/crates/impl-tools)
 [![API](https://docs.rs/impl-tools/badge.svg)](https://docs.rs/impl-tools)
-[![Minimum rustc version](https://img.shields.io/badge/rustc-1.61+-lightgray.svg)](https://github.com/kas-gui/impl-tools#supported-rust-versions)
 
 A set of helper macros
 
