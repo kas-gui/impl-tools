@@ -202,10 +202,9 @@ impl ForDeref {
                 // definitive type is not guaranteed to match the bound.
 
                 // if item.default.is_none() {
-                    emit_call_site_error!(
-                        "cannot autoimpl trait with Deref";
-                        note = item.span() => "item has a Self: Sized bound";
-                        note = definitive_ty.span() => "definitive type does not have a Sized bound";
+                    emit_error!(
+                        item, "cannot autoimpl this trait item with `Self: Sized` bound with Deref";
+                        note = definitive_ty.span() => "definitive type `{}` does not have a Sized bound", definitive_ty;
                     );
                 // }
 
