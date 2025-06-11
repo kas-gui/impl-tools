@@ -46,6 +46,11 @@ use impl_tools_lib::{self as lib, autoimpl};
 ///
 /// This macro may be used in one of two ways.
 ///
+/// NOTE: this macro is already partially obsolete since Rust 1.62 added support
+/// for [default enum variants](https://blog.rust-lang.org/2022/06/30/Rust-1.62.0/#default-enum-variants).
+/// Once [RFC 3681](https://github.com/rust-lang/rfcs/pull/3681) (default field values)
+/// is stable in this crate's MSRV, this macro will be deprecated.
+///
 /// ### Type-level initializer
 ///
 /// ```
@@ -306,6 +311,10 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Caveat: `rustfmt` can not yet format contents (see
 /// [rustfmt#5254](https://github.com/rust-lang/rustfmt/issues/5254),
 /// [rustfmt#5538](https://github.com/rust-lang/rustfmt/pull/5538)).
+///
+/// Note: this macro is largely redundant with the [`macro@impl_self`] macro,
+/// the one exception being [`macro@impl_default`] support. This macro will be
+/// deprecated simultaneously with [`macro@impl_default`].
 ///
 /// ## Special attribute macros
 ///
