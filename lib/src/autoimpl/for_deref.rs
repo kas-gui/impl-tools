@@ -132,7 +132,7 @@ fn has_bound_on_self(item: &TraitItem) -> bool {
         TraitItem::Const(ref item) => &item.generics,
         TraitItem::Fn(ref item) => &item.sig.generics,
         TraitItem::Type(ref item) => &item.generics,
-        TraitItem::Macro(_) | TraitItem::Verbatim(_) => return false,
+        _ => return false,
     };
 
     if let Some(ref clause) = gen.where_clause {
