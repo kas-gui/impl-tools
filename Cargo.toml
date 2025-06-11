@@ -5,7 +5,7 @@ members = ["lib"]
 authors = ["Diggory Hardy <git@dhardy.name>"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/kas-gui/impl-tools"
-rust-version = "1.61.0"
+rust-version = "1.65.0"
 
 [package]
 name = "impl-tools"
