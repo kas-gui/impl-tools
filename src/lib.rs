@@ -413,3 +413,76 @@ pub fn impl_anon(input: TokenStream) -> TokenStream {
     scope.apply_attrs(scope::find_impl_default);
     scope.expand().into()
 }
+
+/// Implement a type with `impl Self` syntax
+///
+/// This attribute macro supports a type (struct, enum, type alias or union)
+/// definition plus associated `impl` items within a `mod`.
+///
+/// Macro expansion discards the `mod` entirely, placing all contents into the
+/// outer scope. This simplifies privacy rules in many use-cases, and highlights
+/// that the usage of `mod` is purely a hack to make the macro input valid Rust
+/// syntax (and thus compatible with `rustfmt`).
+///
+/// ## Syntax
+///
+/// > _ImplSelf_ :\
+/// > &nbsp;&nbsp; `#[impl_self]` `mod` _Name_ `{` _ScopeItem_ _ItemImpl_ * `}`
+/// >
+/// > _ScopeItem_ :\
+/// > &nbsp;&nbsp; _ItemEnum_ | _ItemStruct_ | _ItemType_ | _ItemUnion_
+///
+/// Here, _ItemEnum_, _ItemStruct_, _ItemType_ and _ItemUnion_ are `enum`,
+/// `struct`, `type` alias and `union` definitions respectively. Whichever of
+/// these is used, it must match the module name _Name_.
+///
+/// _ItemImpl_ is an `impl` item. It may use the standard implementation syntax
+/// (e.g. `impl Debug for MyType { .. }`) or `impl Self` syntax (see below).
+///
+/// The `mod` may not contain any other items, except `doc` items (documentation
+/// on the module itself is ignored in favour of documentation on the defined
+/// type) and attributes (which apply as usual).
+///
+/// ### `impl Self` syntax
+///
+/// `impl Self` "syntax" is syntactically-valid (but not semantically-valid)
+/// Rust syntax for writing inherent and trait `impl` blocks:
+///
+/// -   `impl Self { ... }` — an inherent `impl` item on the defined type
+/// -   `impl Debug for Self { ... }` — a trait `impl` item on the defined type
+///
+/// Generic parameters and bounds are copied from the type definition.
+/// Additional generic parameters may be specified; these extend the list of
+/// generic parameters on the type itself, and thus must have distinct names.
+/// Additional bounds (where clauses) may be specified; these extend the list of
+/// bounds on the type itself.
+///
+/// ## Example
+///
+/// ```
+/// #[impl_tools::impl_self]
+/// mod Pair {
+///     /// A pair of values of type `T`
+///     pub struct Pair<T>(T, T);
+///
+///     impl Self {
+///         pub fn new(a: T, b: T) -> Self {
+///             Pair(a, b)
+///         }
+///     }
+///
+///     impl Self where T: Clone {
+///         pub fn splat(a: T) -> Self {
+///             let b = a.clone();
+///             Pair(a, b)
+///         }
+///     }
+/// }
+/// ```
+#[proc_macro_attribute]
+#[proc_macro_error]
+pub fn impl_self(attr: TokenStream, input: TokenStream) -> TokenStream {
+    let _ = parse_macro_input!(attr as scope::ScopeModAttrs);
+    let scope = parse_macro_input!(input as scope::ScopeMod);
+    scope.contents.expand().into()
+}
