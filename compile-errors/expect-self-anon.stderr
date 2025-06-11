@@ -1,0 +1,5 @@
+error: expected `Self` or `Trait for Self`
+ --> compile-errors/expect-self-anon.rs:6:14
+  |
+6 |         impl () {
+  |              ^^
