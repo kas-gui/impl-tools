@@ -39,4 +39,4 @@ twox-hash = "1.6.3"
 autocfg = "1.1.0"
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rustc_1_65)', 'cfg(mock_feature)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mock_feature)'] }
