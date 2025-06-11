@@ -6,16 +6,21 @@ authors = ["Diggory Hardy <git@dhardy.name>"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/kas-gui/impl-tools"
 rust-version = "1.65.0"
+edition = "2021"
 
 [package]
 name = "impl-tools"
 version = "0.10.3"
-edition = "2021"
 description = "Helper macros: autoimpl"
 keywords = ["proc-macro", "macro", "derive", "trait", "procedural"]
 categories = ["development-tools::procedural-macro-helpers"]
 readme = "README.md"
 documentation = "https://docs.rs/impl-tools/"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+edition.workspace = true
 
 [lib]
 proc-macro = true
