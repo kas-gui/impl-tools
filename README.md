@@ -124,15 +124,17 @@ impl_tools::impl_scope! {
 
 Note: `#[impl_default]` is matched within an `impl_scope!` regardless of imports.
 
-### Impl Scope
+### Impl Self
 
-`impl_scope!` is a function-like macro used to define a type plus its
-implementations. It supports `impl Self` syntax:
+`#[impl_self]` provides `impl Self` syntax, avoiding the
+need to repeat generics when writing impls on a local type definition.
+This supercedes `impl_scope!` (except regarding `macro@impl_default`).
 
 ```rust
 use std::fmt::Display;
 
-impl_tools::impl_scope! {
+#[impl_tools::impl_self]
+mod NamedThing {
     /// I don't know why this exists
     pub struct NamedThing<T: Display, F> {
         name: T,
@@ -155,8 +157,9 @@ impl_tools::impl_scope! {
 }
 ```
 
-Caveat: `rustfmt` won't currently touch the contents. Hopefully that
-[can be fixed](https://github.com/rust-lang/rustfmt/pull/5538)!
+Note that `struct NamedThing` is defined directly within the outer namespace,
+not within the `mod NamedThing`. This is a hack required to ensure the contents
+use valid Rust syntax and are thus formattable using `cargo fmt`.
 
 ### Impl Anon
 
@@ -190,7 +193,7 @@ Our macros cannot be extended in the same way, but they can be extended via a ne
 1.  Create a copy of the `impl-tools` crate to create a new "front-end" (`proc-macro` crate).
     This crate is contains only a little code over the [`impl-tools-lib`] crate.
 2.  To extend `#[autoimpl]`, write an impl of [`ImplTrait`] and add it to the attribute's definition.
-    To extend `impl_scope!`, write an impl of [`ScopeAttr`] and add it to the macro's definition.
+    To extend `#[impl_self]`, write an impl of [`ScopeAttr`] and add it to the macro's definition.
 3.  Depend on your new front end crate instead of `impl-tools`.
 
 For an example of this approach, see [kas-macros](https://github.com/kas-gui/kas/tree/master/crates/kas-macros).
@@ -203,10 +206,7 @@ For an example of this approach, see [kas-macros](https://github.com/kas-gui/kas
 Supported Rust Versions
 ------------------------------
 
-The MSRV is 1.61.0.
-
-When using a sufficiently recent compiler version (presumably 1.65.0), generic associated types
-are supported (only applicable to `#[autoimpl]` on trait definitions using GATs).
+The MSRV is 1.65.0.
 
 
 Alternatives
@@ -272,6 +272,10 @@ trait Foo {
     fn foo(&self);
 }
 ```
+
+[derive-where](https://crates.io/crates/derive-where) is a variant of the
+standard `#[derive]` macro supporting custom generic bounds.
+(This offers a subset of the functionality of `#[autoimpl]`).
 
 
 Copyright and Licence
