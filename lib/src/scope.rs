@@ -19,6 +19,9 @@ use syn::{
 
 pub use super::default::{find_impl_default, AttrImplDefault};
 
+/// Attribute for `#[impl_scope]`
+pub struct ScopeModAttrs;
+
 /// Attribute rule for [`Scope`]
 ///
 /// Rules are matched via a path, e.g. `&["foo"]` matches `foo` and
@@ -105,6 +108,22 @@ impl ScopeItem {
             ScopeItem::Union { token, .. } => token.span,
         }
     }
+}
+
+/// A module supporting `impl Self` syntax
+///
+/// This type is used for parsing. Expansion should use [`Self::contents`]
+/// directly, ignoring all other fields.
+#[derive(Debug)]
+pub struct ScopeMod {
+    /// Module declaration
+    pub token: Token![mod],
+    /// Module name
+    pub ident: Ident,
+    /// Braces
+    pub brace: Brace,
+    /// Contents
+    pub contents: Scope,
 }
 
 /// Contents of `impl_scope!`
@@ -220,6 +239,37 @@ mod parsing {
     use syn::spanned::Spanned;
     use syn::{braced, Error, Field, Lifetime, Path, TypePath, WhereClause};
 
+    impl Parse for ScopeModAttrs {
+        fn parse(_input: ParseStream) -> Result<Self> {
+            Ok(Self)
+        }
+    }
+
+    impl Parse for ScopeMod {
+        fn parse(input: ParseStream) -> Result<Self> {
+            let inner;
+
+            let token = input.parse()?;
+            let ident = input.parse::<Ident>()?;
+            let brace = syn::braced!(inner in input);
+            let contents: Scope = inner.parse()?;
+
+            if ident != contents.ident {
+                return Err(syn::Error::new(
+                    contents.ident.span(),
+                    "type name must match mod name",
+                ));
+            }
+
+            Ok(ScopeMod {
+                token,
+                ident,
+                brace,
+                contents,
+            })
+        }
+    }
+
     impl Parse for Scope {
         fn parse(input: ParseStream) -> Result<Self> {
             let attrs = input.call(Attribute::parse_outer)?;
@@ -252,7 +302,7 @@ mod parsing {
             let mut semi = None;
             match token {
                 Token::Enum(token) => {
-                    let (wc, brace, variants) = data_enum(input)?;
+                    let (wc, brace, variants) = data_enum(&input)?;
                     generics.where_clause = wc;
                     item = ScopeItem::Enum {
                         token,
@@ -261,7 +311,7 @@ mod parsing {
                     };
                 }
                 Token::Struct(token) => {
-                    let (wc, fields, semi_token) = data_struct(input)?;
+                    let (wc, fields, semi_token) = data_struct(&input)?;
                     generics.where_clause = wc;
                     semi = semi_token;
                     item = ScopeItem::Struct { token, fields };
@@ -278,7 +328,7 @@ mod parsing {
                     };
                 }
                 Token::Union(token) => {
-                    let (wc, fields) = data_union(input)?;
+                    let (wc, fields) = data_union(&input)?;
                     generics.where_clause = wc;
                     item = ScopeItem::Union { token, fields };
                 }
@@ -286,7 +336,7 @@ mod parsing {
 
             let mut impls = Vec::new();
             while !input.is_empty() {
-                impls.push(parse_impl(&ident, input)?);
+                impls.push(parse_impl(&ident, &input)?);
             }
 
             Ok(Scope {
