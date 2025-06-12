@@ -12,21 +12,18 @@
 //! [`#[autoimpl]`](macro@autoimpl) is an alternative to
 //! [`#[derive]`](macro@derive) with more features (also usable on traits).
 //!
-//! [`#[impl_default]`](macro@impl_default) is shorthand for implementing
-//! [`Default`] with an explicit default value.
-//! It supports structs and enums.
+//! [`#[impl_default]`](macro@impl_default) is an alternative to
+//! `#[derive(Default)]` supporting field initializers.
 //!
-//! [`impl_scope!`] is a function-like macro used to define a type together with
-//! its implementations. This allows:
-//!
-//! -   `impl Self` syntax (avoid repeated definitions of generics)
-//! -   Evaluation of some more complex attribute macros
+//! [`#[impl_self]`](macro@impl_self) provides `impl Self` syntax, avoiding the
+//! need to repeat generics when writing impls on a local type definition.
+//! This supercedes [`impl_scope!`] (except regarding [`macro@impl_default`]).
 //!
 //! [`impl_anon!`] is a function-like macro used to define and instantiate a
 //! unique (single-use) type. It supports everything supported by [`impl_scope!`]
 //! plus field initializers and (limited) automatic typing of fields.
 //!
-//! User-extensions to both [`#[autoimpl]`](macro@autoimpl) and [`impl_scope!`]
+//! User-extensions to both [`#[autoimpl]`](macro@autoimpl) and [`macro@impl_self`]
 //! are possible with a custom proc-macro crate depending on
 //! [impl-tools-lib](https://crates.io/crates/impl-tools-lib).
 
