@@ -10,7 +10,7 @@ edition = "2021"
 
 [package]
 name = "impl-tools"
-version = "0.10.3"
+version = "0.11.2"
 description = "Helper macros: autoimpl"
 keywords = ["proc-macro", "macro", "derive", "trait", "procedural"]
 categories = ["development-tools::procedural-macro-helpers"]

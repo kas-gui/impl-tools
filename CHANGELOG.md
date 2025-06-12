@@ -2,9 +2,13 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-# [Unreleased]
+# [0.11.2]
+
+Version numbers are re-synchronised. In addition:
 
 -   Bump MSRV to 1.65 (#51)
+-   Add `scope::{ScopeModAttrs, ScopeMod}` to `impl-tools-lib` (#53)
+-   Add `#[impl_self]` to `impl-tools` (#53)
 
 ## [0.10.3], [impl-tools-lib-0.11.1] — 2024-12-21
 
