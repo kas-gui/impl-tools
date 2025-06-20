@@ -28,10 +28,23 @@ enum Variants {
     },
 }
 
+#[autoimpl(std::clone::Clone)]
+#[allow(unused)]
+struct NotCopy(i32);
+
+#[autoimpl(std::clone::Clone)]
+#[allow(unused)]
+enum CloneNotCopy {
+    A { not_copy: NotCopy },
+}
+
 #[test]
 fn variants() {
     test_has_copy(Variants::A);
     test_has_clone(Variants::A);
+    test_has_clone(CloneNotCopy::A {
+        not_copy: NotCopy(0),
+    });
     assert_eq!(format!("{:?}", Variants::A), "Variants::A");
     assert_eq!(format!("{:?}", Variants::B(())), "Variants::B(())");
     assert_eq!(
