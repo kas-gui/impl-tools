@@ -31,15 +31,12 @@ impl ImplTrait for ImplClone {
             let tag = quote! { #name :: #ident };
             variants.append_all(match v.fields {
                 Fields::Named(ref fields) => {
-                    let idents = fields.named.iter().map(|f| {
-                        let ident = f.ident.as_ref().unwrap();
-                        quote! { #ident:ref #ident }
-                    });
+                    let idents = fields.named.iter().map(|f| f.ident.as_ref().unwrap());
                     let clones = fields.named.iter().map(|f| {
                         let ident = f.ident.as_ref().unwrap();
                         quote! { #ident: ::core::clone::Clone::clone(#ident) }
                     });
-                    quote! { #tag { #(#idents),* } => #tag { #(#clones),* }, }
+                    quote! { #tag { #(ref #idents),* } => #tag { #(#clones),* }, }
                 }
                 Fields::Unnamed(ref fields) => {
                     let len = fields.unnamed.len();
@@ -48,7 +45,7 @@ impl ImplTrait for ImplClone {
                     for i in 0..len {
                         let ident = idfmt.make_call_site(format_args!("_{i}"));
                         bindings.push(quote! { ref #ident });
-                        items.push(quote! { ::core::clone::Clone::clone(&#ident) });
+                        items.push(quote! { ::core::clone::Clone::clone(#ident) });
                     }
                     quote! { #tag ( #(#bindings),* ) => #tag ( #(#items),* ), }
                 }
@@ -500,7 +497,7 @@ impl ImplTrait for ImplHash {
                         let ident = f.ident.as_ref().unwrap();
                         quote! { ::core::hash::Hash::hash(&#ident, state); }
                     });
-                    quote! { { #(#idents),* } => { #(#hashes);* } }
+                    quote! { { #(ref #idents),* } => { #(#hashes);* } }
                 }
                 Fields::Unnamed(ref fields) => {
                     let len = fields.unnamed.len();
@@ -510,7 +507,7 @@ impl ImplTrait for ImplHash {
                         let ident = idfmt.make_call_site(format_args!("_{i}"));
                         bindings.push(quote! { ref #ident });
                         hashes.append_all(quote! {
-                            ::core::hash::Hash::hash(&#ident, state);
+                            ::core::hash::Hash::hash(#ident, state);
                         });
                     }
                     quote! { ( #(#bindings),* ) => { #hashes } }
