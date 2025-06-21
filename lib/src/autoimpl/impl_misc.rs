@@ -31,10 +31,13 @@ impl ImplTrait for ImplClone {
             let tag = quote! { #name :: #ident };
             variants.append_all(match v.fields {
                 Fields::Named(ref fields) => {
-                    let idents = fields.named.iter().map(|f| f.ident.as_ref().unwrap());
+                    let idents = fields.named.iter().map(|f| {
+                        let ident = f.ident.as_ref().unwrap();
+                        quote! { #ident:ref #ident }
+                    });
                     let clones = fields.named.iter().map(|f| {
                         let ident = f.ident.as_ref().unwrap();
-                        quote! { #ident: ::core::clone::Clone::clone(&#ident) }
+                        quote! { #ident: ::core::clone::Clone::clone(#ident) }
                     });
                     quote! { #tag { #(#idents),* } => #tag { #(#clones),* }, }
                 }
