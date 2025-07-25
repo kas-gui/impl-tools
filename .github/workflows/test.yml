@@ -7,60 +7,47 @@ on:
     branches: [ master, '[0-9]+.[0-9]+' ]
 
 jobs:
-  nightly:
-    name: Nightly, format and Doc
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@nightly
-      - name: Build docs
-        run: cargo doc --all-features --all --no-deps
-      - name: Test impl-tools-lib
-        run: cargo test --manifest-path lib/Cargo.toml --all-features
-      - name: Test impl-tools
-        run: cargo test --all-features
+  test:
+    name: Test
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            toolchain: nightly
+            variant: docs
+          - os: macos-latest
+            toolchain: beta
+          - os: windows-latest
+            toolchain: stable
+          - os: ubuntu-latest
+            toolchain: "1.66.0"
+            targets: "--lib --tests"
+            variant: MSRV
 
-  beta:
-    name: Beta on MacOS
-    runs-on: macos-latest
-
-    steps:
-      - uses: actions/checkout@v5
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@beta
-      - name: Test impl-tools-lib
-        run: cargo test --manifest-path lib/Cargo.toml --all-features
-      - name: Test impl-tools
-        run: cargo test --all-features
-
-  stable:
-    name: Stable on Windows
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v5
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - name: Test impl-tools-lib
-        run: cargo test --manifest-path lib/Cargo.toml --all-features
-      - name: Test impl-tools
-        run: cargo test --all-features
+      - name: Checkout
+        uses: actions/checkout@v5
 
-  msrv:
-    name: MSRV
-    runs-on: macos-latest
-
-    steps:
-      - uses: actions/checkout@v5
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@1.66.0
-      - name: Use Cargo.lock.msrv
+      - name: MSRV
+        if: ${{ matrix.variant == 'MSRV' }}
         run: cp Cargo.lock.msrv Cargo.lock
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+
+      - name: Build docs
+        if: ${{ matrix.variant == 'docs' }}
+        run: cargo doc --all-features --all --no-deps
+
       - name: Test impl-tools-lib
-        run: cargo test --manifest-path lib/Cargo.toml --all-features --lib --tests
+        run: cargo test --manifest-path lib/Cargo.toml --all-features ${{ matrix.targets }}
+
       - name: Test impl-tools
-        run: cargo test --all-features --lib --tests
+        run: cargo test --all-features ${{ matrix.targets }}
 
   workspace:
     runs-on: ubuntu-latest
