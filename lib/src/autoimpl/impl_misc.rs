@@ -27,6 +27,12 @@ impl ImplTrait for ImplClone {
         let name = &item.ident;
         let mut variants = Toks::new();
         for v in item.variants.iter() {
+            for attr in &v.attrs {
+                if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                    attr.to_tokens(&mut variants);
+                }
+            }
+
             let ident = &v.ident;
             let tag = quote! { #name :: #ident };
             variants.append_all(match v.fields {
@@ -68,26 +74,36 @@ impl ImplTrait for ImplClone {
             Fields::Named(fields) => {
                 let mut toks = Toks::new();
                 for field in fields.named.iter() {
-                    let ident = field.ident.as_ref().unwrap();
-                    if args.ignore_named(ident) {
-                        toks.append_all(quote! { #ident: Default::default(), });
-                    } else {
-                        toks.append_all(
-                            quote! { #ident: ::core::clone::Clone::clone(&self.#ident), },
-                        );
+                    for attr in &field.attrs {
+                        if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                            attr.to_tokens(&mut toks);
+                        }
                     }
+
+                    let ident = field.ident.as_ref().unwrap();
+                    toks.append_all(if args.ignore_named(ident) {
+                        quote! { #ident: Default::default(), }
+                    } else {
+                        quote! { #ident: ::core::clone::Clone::clone(&self.#ident), }
+                    });
                 }
                 quote! { #type_ident { #toks } }
             }
             Fields::Unnamed(fields) => {
                 let mut toks = Toks::new();
-                for i in 0..fields.unnamed.len() {
-                    let index = Index::from(i);
-                    if args.ignore_unnamed(&index) {
-                        toks.append_all(quote! { Default::default(), });
-                    } else {
-                        toks.append_all(quote! { ::core::clone::Clone::clone(&self.#index), });
+                for (i, field) in fields.unnamed.iter().enumerate() {
+                    for attr in &field.attrs {
+                        if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                            attr.to_tokens(&mut toks);
+                        }
                     }
+
+                    let index = Index::from(i);
+                    toks.append_all(if args.ignore_unnamed(&index) {
+                        quote! { Default::default(), }
+                    } else {
+                        quote! { ::core::clone::Clone::clone(&self.#index), }
+                    });
                 }
                 quote! { #type_ident ( #toks ) }
             }

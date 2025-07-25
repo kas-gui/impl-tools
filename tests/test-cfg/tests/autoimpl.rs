@@ -2,7 +2,10 @@
 
 #![allow(non_snake_case)]
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+use impl_tools::autoimpl;
+
+#[autoimpl(Clone where T: trait)]
+#[derive(Debug, PartialEq, Eq)]
 struct S<T> {
     a: T,
     #[cfg(unix)]
@@ -40,7 +43,8 @@ fn test_debug_S() {
     assert_eq!(format!("{s:?}"), expected);
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[autoimpl(Clone where T: trait)]
+#[derive(Debug, PartialEq, Eq)]
 enum E<T> {
     A(T),
     #[cfg(unix)]
