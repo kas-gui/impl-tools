@@ -1,5 +1,5 @@
 [workspace]
-members = ["lib"]
+members = ["lib", "tests/test-cfg"]
 
 [workspace.package]
 authors = ["Diggory Hardy <git@dhardy.name>"]

@@ -49,6 +49,12 @@ jobs:
       - name: Test impl-tools
         run: cargo test --all-features ${{ matrix.targets }}
 
+      - name: Test test-cfg
+        working-directory: tests/test-cfg
+        run: |
+          cargo test
+          cargo test --features feature1
+
   workspace:
     runs-on: ubuntu-latest
     steps:
