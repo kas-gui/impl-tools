@@ -51,8 +51,10 @@ enum E<T> {
     B(String),
     #[cfg(not(unix))]
     B(Box<str>),
-    #[cfg(feature = "feature1")]
-    C(Vec<i32>),
+    C {
+        #[cfg(feature = "feature1")]
+        nums: Vec<i32>,
+    },
 }
 
 #[test]
@@ -63,9 +65,9 @@ fn test_clone_E() {
     let b = E::<()>::B("rain".to_string().into());
     assert_eq!(b.clone(), b);
 
-    #[cfg(feature = "feature1")]
-    {
-        let c = E::<()>::C(vec![1, 2, 3]);
-        assert_eq!(c.clone(), c);
-    }
+    let c = E::<()>::C {
+        #[cfg(feature = "feature1")]
+        nums: vec![1, 2, 3],
+    };
+    assert_eq!(c.clone(), c);
 }

@@ -22,7 +22,7 @@ impl ImplTrait for ImplClone {
         true
     }
 
-    fn enum_items(&self, item: &ItemEnum, _: &ImplArgs) -> Result<(Toks, Toks)> {
+    fn enum_items(&self, item: &ItemEnum, args: &ImplArgs) -> Result<(Toks, Toks)> {
         let mut idfmt = IdentFormatter::new();
         let name = &item.ident;
         let mut variants = Toks::new();
@@ -37,23 +37,43 @@ impl ImplTrait for ImplClone {
             let tag = quote! { #name :: #ident };
             variants.append_all(match v.fields {
                 Fields::Named(ref fields) => {
-                    let idents = fields.named.iter().map(|f| f.ident.as_ref().unwrap());
-                    let clones = fields.named.iter().map(|f| {
-                        let ident = f.ident.as_ref().unwrap();
-                        quote! { #ident: ::core::clone::Clone::clone(#ident) }
-                    });
-                    quote! { #tag { #(ref #idents),* } => #tag { #(#clones),* }, }
+                    let mut idents = Toks::new();
+                    let mut toks = Toks::new();
+                    for field in fields.named.iter() {
+                        for attr in &field.attrs {
+                            if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                                attr.to_tokens(&mut idents);
+                                attr.to_tokens(&mut toks);
+                            }
+                        }
+
+                        let ident = field.ident.as_ref().unwrap();
+                        idents.append_all(quote! { ref #ident, });
+                        toks.append_all(if args.ignore_named(ident) {
+                            quote! { #ident: Default::default(), }
+                        } else {
+                            quote! { #ident: ::core::clone::Clone::clone(#ident), }
+                        });
+                    }
+                    quote! { #tag { #idents } => #tag { #toks }, }
                 }
                 Fields::Unnamed(ref fields) => {
-                    let len = fields.unnamed.len();
-                    let mut bindings = Vec::with_capacity(len);
-                    let mut items = Vec::with_capacity(len);
-                    for i in 0..len {
+                    let mut bindings = Toks::new();
+                    let mut toks = Toks::new();
+                    for (i, field) in fields.unnamed.iter().enumerate() {
                         let ident = idfmt.make_call_site(format_args!("_{i}"));
-                        bindings.push(quote! { ref #ident });
-                        items.push(quote! { ::core::clone::Clone::clone(#ident) });
+
+                        for attr in &field.attrs {
+                            if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                                attr.to_tokens(&mut bindings);
+                                attr.to_tokens(&mut toks);
+                            }
+                        }
+
+                        bindings.append_all(quote! { ref #ident, });
+                        toks.append_all(quote! { ::core::clone::Clone::clone(#ident), });
                     }
-                    quote! { #tag ( #(#bindings),* ) => #tag ( #(#items),* ), }
+                    quote! { #tag ( #bindings ) => #tag ( #toks ), }
                 }
                 Fields::Unit => quote! { #tag => #tag, },
             });
