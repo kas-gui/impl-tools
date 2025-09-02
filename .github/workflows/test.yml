@@ -11,7 +11,7 @@ jobs:
     name: Nightly, format and Doc
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@nightly
       - name: Build docs
@@ -26,7 +26,7 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@beta
       - name: Test impl-tools-lib
@@ -39,7 +39,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Test impl-tools-lib
@@ -52,7 +52,7 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@1.66.0
       - name: Use Cargo.lock.msrv
@@ -65,7 +65,7 @@ jobs:
   workspace:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
