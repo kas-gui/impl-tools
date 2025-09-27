@@ -4,8 +4,8 @@
 
 use impl_tools::autoimpl;
 
-#[autoimpl(Clone where T: trait)]
-#[derive(Debug, PartialEq, Eq)]
+#[autoimpl(Clone, Debug where T: trait)]
+#[derive(PartialEq, Eq)]
 struct S<T> {
     a: T,
     #[cfg(unix)]
@@ -43,8 +43,8 @@ fn test_debug_S() {
     assert_eq!(format!("{s:?}"), expected);
 }
 
-#[autoimpl(Clone where T: trait)]
-#[derive(Debug, PartialEq, Eq)]
+#[autoimpl(Clone, Debug where T: trait)]
+#[derive(PartialEq, Eq)]
 enum E<T> {
     A(T),
     #[cfg(unix)]
