@@ -11,6 +11,7 @@ use impl_tools::autoimpl;
 
 #[autoimpl(for<'a, T: trait> &'a mut T, Box<T>)]
 trait Z {
+    #[allow(unused)]
     const A: i32;
 
     fn f(&self);
