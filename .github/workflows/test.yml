@@ -20,7 +20,7 @@ jobs:
           - os: windows-latest
             toolchain: stable
           - os: ubuntu-latest
-            toolchain: "1.66.0"
+            toolchain: "1.70.0"
             targets: "--lib --tests"
             variant: MSRV
 
@@ -62,7 +62,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-          components: rustfmt
+          components: rustfmt,clippy
       - name: rustfmt
         run: cargo fmt --all -- --check
       - name: clippy
