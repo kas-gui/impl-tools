@@ -1,0 +1,14 @@
+[package]
+name = "test-cfg"
+version = "0.1.0"
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+edition.workspace = true
+publish = false
+
+[features]
+feature1 = []
+
+[dependencies]
+impl-tools = { version = "0.11", path = "../.." }

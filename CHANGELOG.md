@@ -2,6 +2,12 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.12.0] — unreleased
+
+-   Bump MSRV to 1.70 (#59)
+-   Let `#[autoimpl(Clone, Debug, Default)]` support `#[cfg]` on struct fields, enum variants and variant fields (#59)
+-   Let `#[autoimpl(Clone, Debug)]` support `ignore` on named enum fields (#59)
+
 # [0.11.3] (lib only)
 
 -   Fix `#[autoimpl(Clone)]` and `#[autoimpl(Hash)]` for non-`Copy` enums (#55, #56)

@@ -203,12 +203,6 @@ For an example of this approach, see [kas-macros](https://github.com/kas-gui/kas
 [`ScopeAttr`]: https://docs.rs/impl-tools-lib/latest/impl_tools_lib/trait.ScopeAttr.html
 
 
-Supported Rust Versions
-------------------------------
-
-The MSRV is 1.65.0.
-
-
 Alternatives
 ------------
 

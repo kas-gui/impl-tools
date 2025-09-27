@@ -22,32 +22,58 @@ impl ImplTrait for ImplClone {
         true
     }
 
-    fn enum_items(&self, item: &ItemEnum, _: &ImplArgs) -> Result<(Toks, Toks)> {
+    fn enum_items(&self, item: &ItemEnum, args: &ImplArgs) -> Result<(Toks, Toks)> {
         let mut idfmt = IdentFormatter::new();
         let name = &item.ident;
         let mut variants = Toks::new();
         for v in item.variants.iter() {
+            for attr in &v.attrs {
+                if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                    attr.to_tokens(&mut variants);
+                }
+            }
+
             let ident = &v.ident;
             let tag = quote! { #name :: #ident };
             variants.append_all(match v.fields {
                 Fields::Named(ref fields) => {
-                    let idents = fields.named.iter().map(|f| f.ident.as_ref().unwrap());
-                    let clones = fields.named.iter().map(|f| {
-                        let ident = f.ident.as_ref().unwrap();
-                        quote! { #ident: ::core::clone::Clone::clone(#ident) }
-                    });
-                    quote! { #tag { #(ref #idents),* } => #tag { #(#clones),* }, }
+                    let mut idents = Toks::new();
+                    let mut toks = Toks::new();
+                    for field in fields.named.iter() {
+                        for attr in &field.attrs {
+                            if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                                attr.to_tokens(&mut idents);
+                                attr.to_tokens(&mut toks);
+                            }
+                        }
+
+                        let ident = field.ident.as_ref().unwrap();
+                        idents.append_all(quote! { ref #ident, });
+                        toks.append_all(if args.ignore_named(ident) {
+                            quote! { #ident: Default::default(), }
+                        } else {
+                            quote! { #ident: ::core::clone::Clone::clone(#ident), }
+                        });
+                    }
+                    quote! { #tag { #idents } => #tag { #toks }, }
                 }
                 Fields::Unnamed(ref fields) => {
-                    let len = fields.unnamed.len();
-                    let mut bindings = Vec::with_capacity(len);
-                    let mut items = Vec::with_capacity(len);
-                    for i in 0..len {
+                    let mut bindings = Toks::new();
+                    let mut toks = Toks::new();
+                    for (i, field) in fields.unnamed.iter().enumerate() {
                         let ident = idfmt.make_call_site(format_args!("_{i}"));
-                        bindings.push(quote! { ref #ident });
-                        items.push(quote! { ::core::clone::Clone::clone(#ident) });
+
+                        for attr in &field.attrs {
+                            if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                                attr.to_tokens(&mut bindings);
+                                attr.to_tokens(&mut toks);
+                            }
+                        }
+
+                        bindings.append_all(quote! { ref #ident, });
+                        toks.append_all(quote! { ::core::clone::Clone::clone(#ident), });
                     }
-                    quote! { #tag ( #(#bindings),* ) => #tag ( #(#items),* ), }
+                    quote! { #tag ( #bindings ) => #tag ( #toks ), }
                 }
                 Fields::Unit => quote! { #tag => #tag, },
             });
@@ -68,26 +94,36 @@ impl ImplTrait for ImplClone {
             Fields::Named(fields) => {
                 let mut toks = Toks::new();
                 for field in fields.named.iter() {
-                    let ident = field.ident.as_ref().unwrap();
-                    if args.ignore_named(ident) {
-                        toks.append_all(quote! { #ident: Default::default(), });
-                    } else {
-                        toks.append_all(
-                            quote! { #ident: ::core::clone::Clone::clone(&self.#ident), },
-                        );
+                    for attr in &field.attrs {
+                        if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                            attr.to_tokens(&mut toks);
+                        }
                     }
+
+                    let ident = field.ident.as_ref().unwrap();
+                    toks.append_all(if args.ignore_named(ident) {
+                        quote! { #ident: Default::default(), }
+                    } else {
+                        quote! { #ident: ::core::clone::Clone::clone(&self.#ident), }
+                    });
                 }
                 quote! { #type_ident { #toks } }
             }
             Fields::Unnamed(fields) => {
                 let mut toks = Toks::new();
-                for i in 0..fields.unnamed.len() {
-                    let index = Index::from(i);
-                    if args.ignore_unnamed(&index) {
-                        toks.append_all(quote! { Default::default(), });
-                    } else {
-                        toks.append_all(quote! { ::core::clone::Clone::clone(&self.#index), });
+                for (i, field) in fields.unnamed.iter().enumerate() {
+                    for attr in &field.attrs {
+                        if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                            attr.to_tokens(&mut toks);
+                        }
                     }
+
+                    let index = Index::from(i);
+                    toks.append_all(if args.ignore_unnamed(&index) {
+                        quote! { Default::default(), }
+                    } else {
+                        quote! { ::core::clone::Clone::clone(&self.#index), }
+                    });
                 }
                 quote! { #type_ident ( #toks ) }
             }
@@ -133,7 +169,7 @@ impl ImplTrait for ImplDebug {
         true
     }
 
-    fn enum_items(&self, item: &ItemEnum, _: &ImplArgs) -> Result<(Toks, Toks)> {
+    fn enum_items(&self, item: &ItemEnum, args: &ImplArgs) -> Result<(Toks, Toks)> {
         let mut idfmt = IdentFormatter::new();
         let name = &item.ident;
         let type_name = item.ident.to_string();
@@ -144,28 +180,44 @@ impl ImplTrait for ImplDebug {
             let tag = quote! { #name :: #ident };
             variants.append_all(match v.fields {
                 Fields::Named(ref fields) => {
-                    let idents = fields.named.iter().map(|f| f.ident.as_ref().unwrap());
-                    let mut items = Toks::new();
+                    let mut idents = Toks::new();
+                    let mut stmts = quote! { let mut debug = f.debug_struct(#var_name); };
                     for field in fields.named.iter() {
+                        for attr in &field.attrs {
+                            if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                                attr.to_tokens(&mut idents);
+                                attr.to_tokens(&mut stmts);
+                            }
+                        }
+
                         let ident = field.ident.as_ref().unwrap();
-                        let name = ident.to_string();
-                        items.append_all(quote! { .field(#name, #ident) });
+                        idents.append_all(quote! { ref #ident, });
+                        if !args.ignore_named(ident) {
+                            let name = ident.to_string();
+                            stmts.append_all(quote! { { debug.field(#name, #ident); } });
+                        }
                     }
-                    quote! {
-                        #tag { #(ref #idents),* } => f.debug_struct(#var_name) #items .finish(),
-                    }
+                    stmts.append_all(quote! { debug.finish() });
+
+                    quote! { #tag { #idents } => { #stmts }, }
                 }
                 Fields::Unnamed(ref fields) => {
-                    let len = fields.unnamed.len();
-                    let mut bindings = Vec::with_capacity(len);
-                    let mut items = Toks::new();
-                    for i in 0..len {
+                    let mut bindings = Toks::new();
+                    let mut stmts = quote! { let mut debug = f.debug_tuple(#var_name); };
+                    for (i, field) in fields.unnamed.iter().enumerate() {
+                        for attr in &field.attrs {
+                            if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                                attr.to_tokens(&mut bindings);
+                                attr.to_tokens(&mut stmts);
+                            }
+                        }
+
                         let ident = idfmt.make_call_site(format_args!("_{i}"));
-                        bindings.push(quote! { ref #ident });
-                        items.append_all(quote! { .field(#ident) });
+                        bindings.append_all(quote! { ref #ident, });
+                        stmts.append_all(quote! { { debug.field(#ident); } });
                     }
                     quote! {
-                        #tag ( #(#bindings),* ) => f.debug_tuple(#var_name) #items .finish(),
+                        #tag ( #bindings ) => { #stmts; debug.finish() },
                     }
                 }
                 Fields::Unit => quote! { #tag => f.write_str(#var_name), },
@@ -186,46 +238,52 @@ impl ImplTrait for ImplDebug {
 
     fn struct_items(&self, item: &ItemStruct, args: &ImplArgs) -> Result<(Toks, Toks)> {
         let type_name = item.ident.to_string();
-        let mut inner;
-        match &item.fields {
+        let inner = match &item.fields {
             Fields::Named(fields) => {
-                inner = quote! { f.debug_struct(#type_name) };
+                let mut stmts = quote! { let mut debug = f.debug_struct(#type_name); };
                 let mut no_skips = true;
                 for field in fields.named.iter() {
+                    for attr in &field.attrs {
+                        if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                            attr.to_tokens(&mut stmts);
+                        }
+                    }
+
                     let ident = field.ident.as_ref().unwrap();
                     if !args.ignore_named(ident) {
                         let name = ident.to_string();
-                        inner.append_all(quote! {
-                            .field(#name, &self.#ident)
-                        });
+                        stmts.append_all(quote! { { debug.field(#name, &self.#ident); } });
                     } else {
                         no_skips = false;
                     }
                 }
                 if no_skips {
-                    inner.append_all(quote! { .finish() });
+                    quote! { #stmts; debug.finish() }
                 } else {
-                    inner.append_all(quote! { .finish_non_exhaustive() });
-                };
+                    quote! { #stmts; debug.finish_non_exhaustive() }
+                }
             }
             Fields::Unnamed(fields) => {
-                inner = quote! { f.debug_tuple(#type_name) };
-                for i in 0..fields.unnamed.len() {
+                let mut stmts = quote! { let mut debug = f.debug_tuple(#type_name); };
+                for (i, field) in fields.unnamed.iter().enumerate() {
+                    for attr in &field.attrs {
+                        if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                            attr.to_tokens(&mut stmts);
+                        }
+                    }
+
                     let index = Index::from(i);
                     if !args.ignore_unnamed(&index) {
-                        inner.append_all(quote! {
-                            .field(&self.#index)
-                        });
+                        stmts.append_all(quote! { { debug.field(&self.#index); } });
                     } else {
-                        inner.append_all(quote! {
-                            .field(&format_args!("_"))
-                        });
+                        stmts.append_all(quote! { { debug.field(&format_args!("_")); } });
                     }
                 }
-                inner.append_all(quote! { .finish() });
+                quote! { #stmts; debug.finish() }
             }
-            Fields::Unit => inner = quote! { f.write_str(#type_name) },
+            Fields::Unit => quote! { f.write_str(#type_name) },
         };
+
         let method = quote! {
             fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
                 #inner
@@ -244,25 +302,37 @@ impl ImplTrait for ImplDefault {
 
     fn struct_items(&self, item: &ItemStruct, _: &ImplArgs) -> Result<(Toks, Toks)> {
         let type_ident = &item.ident;
-        let mut inner;
-        match &item.fields {
+        let inner = match &item.fields {
             Fields::Named(fields) => {
-                inner = quote! {};
+                let mut toks = Toks::new();
                 for field in fields.named.iter() {
+                    for attr in &field.attrs {
+                        if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                            attr.to_tokens(&mut toks);
+                        }
+                    }
+
                     let ident = field.ident.as_ref().unwrap();
-                    inner.append_all(quote! { #ident: Default::default(), });
+                    toks.append_all(quote! { #ident: Default::default(), });
                 }
-                inner = quote! { #type_ident { #inner } };
+                quote! { #type_ident { #toks } }
             }
             Fields::Unnamed(fields) => {
-                inner = quote! {};
-                for _ in 0..fields.unnamed.len() {
-                    inner.append_all(quote! { Default::default(), });
+                let mut toks = Toks::new();
+                for field in fields.unnamed.iter() {
+                    for attr in &field.attrs {
+                        if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                            attr.to_tokens(&mut toks);
+                        }
+                    }
+
+                    toks.append_all(quote! { Default::default(), });
                 }
-                inner = quote! { #type_ident(#inner) };
+                quote! { #type_ident(#toks) }
             }
-            Fields::Unit => inner = quote! { #type_ident },
-        }
+            Fields::Unit => quote! { #type_ident },
+        };
+
         let method = quote! {
             fn default() -> Self {
                 #inner
