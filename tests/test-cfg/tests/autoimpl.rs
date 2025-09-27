@@ -4,7 +4,7 @@
 
 use impl_tools::autoimpl;
 
-#[autoimpl(Clone, Debug where T: trait)]
+#[autoimpl(Clone, Debug, Default where T: trait)]
 #[derive(PartialEq, Eq)]
 struct S<T> {
     a: T,
@@ -31,6 +31,7 @@ impl<T> S<T> {
 fn test_clone_S() {
     let a = S::new(());
     assert_eq!(a.clone(), a);
+    assert!(a != S::default());
 }
 
 #[test]

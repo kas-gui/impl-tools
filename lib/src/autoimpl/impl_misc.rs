@@ -302,25 +302,37 @@ impl ImplTrait for ImplDefault {
 
     fn struct_items(&self, item: &ItemStruct, _: &ImplArgs) -> Result<(Toks, Toks)> {
         let type_ident = &item.ident;
-        let mut inner;
-        match &item.fields {
+        let inner = match &item.fields {
             Fields::Named(fields) => {
-                inner = quote! {};
+                let mut toks = Toks::new();
                 for field in fields.named.iter() {
+                    for attr in &field.attrs {
+                        if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                            attr.to_tokens(&mut toks);
+                        }
+                    }
+
                     let ident = field.ident.as_ref().unwrap();
-                    inner.append_all(quote! { #ident: Default::default(), });
+                    toks.append_all(quote! { #ident: Default::default(), });
                 }
-                inner = quote! { #type_ident { #inner } };
+                quote! { #type_ident { #toks } }
             }
             Fields::Unnamed(fields) => {
-                inner = quote! {};
-                for _ in 0..fields.unnamed.len() {
-                    inner.append_all(quote! { Default::default(), });
+                let mut toks = Toks::new();
+                for field in fields.unnamed.iter() {
+                    for attr in &field.attrs {
+                        if attr.path().get_ident().is_some_and(|path| path == "cfg") {
+                            attr.to_tokens(&mut toks);
+                        }
+                    }
+
+                    toks.append_all(quote! { Default::default(), });
                 }
-                inner = quote! { #type_ident(#inner) };
+                quote! { #type_ident(#toks) }
             }
-            Fields::Unit => inner = quote! { #type_ident },
-        }
+            Fields::Unit => quote! { #type_ident },
+        };
+
         let method = quote! {
             fn default() -> Self {
                 #inner
