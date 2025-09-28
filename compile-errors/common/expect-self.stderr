@@ -1,5 +1,5 @@
 error: expected `Self` or `A` or `A<...>` or `Trait for Self`, etc
- --> compile-errors/expect-self.rs:5:10
+ --> compile-errors/common/expect-self.rs:5:10
   |
 5 |     impl () {
   |          ^^
