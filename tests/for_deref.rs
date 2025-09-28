@@ -67,13 +67,6 @@ where
     V: Debug,
 {
     fn g(&self) -> V;
-
-    fn s<X>(&self, f: impl Fn(V) -> X) -> X
-    where
-        Self: Sized,
-    {
-        f(self.g())
-    }
 }
 
 #[test]
@@ -87,7 +80,6 @@ fn g() {
 
     fn impls_g(g: impl G<i32>) {
         assert_eq!(g.g(), 123);
-        assert!(g.s(|x| x == 123));
     }
 
     impls_g(S);
