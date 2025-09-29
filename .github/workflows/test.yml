@@ -15,6 +15,7 @@ jobs:
           - os: ubuntu-latest
             toolchain: nightly
             variant: docs
+            features: "--features nightly-diagnostics"
           - os: macos-latest
             toolchain: beta
           - os: windows-latest
@@ -41,13 +42,13 @@ jobs:
 
       - name: Build docs
         if: ${{ matrix.variant == 'docs' }}
-        run: cargo doc --all-features --all --no-deps
+        run: cargo doc ${{ matrix.features }} --all --no-deps
 
       - name: Test impl-tools-lib
-        run: cargo test --manifest-path lib/Cargo.toml --all-features ${{ matrix.targets }}
+        run: cargo test --manifest-path lib/Cargo.toml ${{ matrix.targets }}
 
       - name: Test impl-tools
-        run: cargo test --all-features ${{ matrix.targets }}
+        run: cargo test ${{ matrix.features }} ${{ matrix.targets }}
 
       - name: Test test-cfg
         working-directory: tests/test-cfg
