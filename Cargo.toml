@@ -25,6 +25,12 @@ edition.workspace = true
 [lib]
 proc-macro = true
 
+[features]
+# Enables better proc-macro diagnostics (including warnings); nightly only.
+nightly-diagnostics = ["proc-macro-error2/nightly"]
+# Squelch lint: "autoimpl on trait that has a method with Self: Sized bound"
+allow-trait-autoimpl-with-sized-fn-bound = ["impl-tools-lib/allow-trait-autoimpl-with-sized-fn-bound"]
+
 [dependencies.proc-macro-error2]
 version = "2.0"
 default-features = false

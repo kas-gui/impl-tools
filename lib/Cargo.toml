@@ -11,6 +11,10 @@ repository.workspace = true
 rust-version.workspace = true
 edition.workspace = true
 
+[features]
+# Squelch lint: "autoimpl on trait that has a method with Self: Sized bound"
+allow-trait-autoimpl-with-sized-fn-bound = []
+
 [dependencies]
 quote = "1.0"
 proc-macro2 = "1.0"

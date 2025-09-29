@@ -1,5 +1,5 @@
 error: #[autoimpl(Trait)] can only be used on enum or struct items
- --> compile-errors/wrong-item-type.rs:3:1
+ --> compile-errors/common/wrong-item-type.rs:3:1
   |
 3 | #[impl_tools::autoimpl(Copy)]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

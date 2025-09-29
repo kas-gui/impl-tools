@@ -240,10 +240,12 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 /// Traits using generics and trait items using generics are, for the most part,
 /// supported.
 ///
-/// Items with a where clause with a type bound on `Self` are not supported
-/// since the item is not guaranteed to exist on the definitive type.
-/// Exception: methods with a default implementation (in this case the item is
-/// skipped).
+/// Items with a where clause with a type bound on `Self` cannot be implemented
+/// via [`Deref`] since the item is not guaranteed to exist on the definitive
+/// type. Such items with a default implementation may be implemented using this
+/// that default implementation, though this results in a warning by default
+/// (requires feature "nightly-diagnostics").
+/// In other cases an error is reported.
 ///
 /// An example:
 /// ```

@@ -1,0 +1,22 @@
+warning: autoimpl on trait that has a method with Self: Sized bound
+  --> compile-errors/nightly/trait-autoimpl-with-sized-fn-bound.rs:4:1
+   |
+ 4 | #[autoimpl(for<'a, T> &'a T, &'a mut T, Box<T> where T: trait + ?Sized)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+note: method impl uses default implementation, not deref
+  --> compile-errors/nightly/trait-autoimpl-with-sized-fn-bound.rs:11:5
+   |
+11 | /     fn s<X>(&self, f: impl Fn(V) -> X) -> X
+12 | |     where
+13 | |         Self: Sized,
+...  |
+16 | |     }
+   | |_____^
+   = note: this warning originates in the attribute macro `autoimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: Warnings verification
+  --> compile-errors/nightly/trait-autoimpl-with-sized-fn-bound.rs:20:5
+   |
+20 |     compile_error!("Warnings verification");
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
