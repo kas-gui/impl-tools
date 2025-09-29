@@ -1,6 +1,6 @@
 [package]
 name = "impl-tools-lib"
-version = "0.11.3"
+version = "0.11.4"
 description = "Helper macros: autoimpl"
 keywords = ["derive", "trait"]
 readme = "README.md"
