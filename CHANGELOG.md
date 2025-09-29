@@ -2,9 +2,11 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-# [0.12.0] — unreleased
+# [0.11.4] — unreleased
 
 -   Bump MSRV to 1.70 (#59)
+-   Add feature `nightly-diagnostics` (#60)
+-   Warn on usage of `#[autoimpl]` for traits where a method has a `Self: Sized` bound, with opt-out feature `allow-trait-autoimpl-with-sized-fn-bound` (#60)
 -   Let `#[autoimpl(Clone, Debug, Default)]` support `#[cfg]` on struct fields, enum variants and variant fields (#59)
 -   Let `#[autoimpl(Clone, Debug)]` support `ignore` on named enum fields (#59)
 
