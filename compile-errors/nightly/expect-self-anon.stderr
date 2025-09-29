@@ -5,8 +5,8 @@ error: expected `Self` or `Trait for Self`
   |              ^^
 
 error: expected expression, found end of macro arguments
- --> compile-errors/nightly/expect-self-anon.rs:2:13
-  |
+  --> compile-errors/nightly/expect-self-anon.rs:2:13
+   |
  2 |       let _ = impl_tools::impl_anon! {
    |  _____________^
  3 | |         #[derive(Clone, Debug)]

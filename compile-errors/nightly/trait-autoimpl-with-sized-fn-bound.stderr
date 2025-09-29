@@ -1,6 +1,6 @@
 warning: autoimpl on trait that has a method with Self: Sized bound
- --> compile-errors/nightly/trait-autoimpl-with-sized-fn-bound.rs:4:1
-  |
+  --> compile-errors/nightly/trait-autoimpl-with-sized-fn-bound.rs:4:1
+   |
  4 | #[autoimpl(for<'a, T> &'a T, &'a mut T, Box<T> where T: trait + ?Sized)]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
