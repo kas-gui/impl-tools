@@ -21,12 +21,12 @@ pub mod fields;
 pub mod generics;
 pub mod scope;
 mod split_impl;
+mod utils;
 
 pub use default::ImplDefault;
 pub use split_impl::SplitImpl;
 
 use proc_macro2::Span;
-use quote::ToTokens;
 use syn::Ident;
 
 /// Tool to make a formatted [`Ident`](struct@Ident)
@@ -159,13 +159,4 @@ impl SimplePath {
             self.matches(path)
         }
     }
-}
-
-/// Determine whether to copy an attribute from a declaration to an implementation.
-///
-/// This is a HACK: there is no definitive determination of which attributes
-/// should be emitted on the generated impl fn items. We use a whitelist.
-fn propegate_attr_to_impl(attr: &syn::Attribute) -> bool {
-    let path = attr.path().to_token_stream().to_string();
-    matches!(path.as_str(), "cfg" | "allow" | "warn" | "deny" | "forbid")
 }

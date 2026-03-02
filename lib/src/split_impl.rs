@@ -5,6 +5,7 @@
 
 //! `#[split_impl]`
 
+use crate::utils::{self, copy_non_doc_attrs, PathAsStr};
 use proc_macro2::TokenStream;
 use proc_macro_error2::emit_error;
 use quote::quote;
@@ -45,7 +46,7 @@ impl SplitImpl {
     pub fn process(self, mut trait_: ItemTrait) -> TokenStream {
         let mut attrs = Vec::with_capacity(trait_.attrs.len());
         for attr in &trait_.attrs {
-            if crate::propegate_attr_to_impl(attr) {
+            if utils::propegate_attr_to_impl(attr) {
                 attrs.push(attr.clone());
             }
         }
@@ -60,7 +61,7 @@ impl SplitImpl {
                     };
 
                     items.push(ImplItem::Const(syn::ImplItemConst {
-                        attrs: item.attrs.clone(),
+                        attrs: copy_non_doc_attrs(&item.attrs),
                         vis: syn::Visibility::Inherited,
                         defaultness: None,
                         const_token: item.const_token.clone(),
@@ -80,12 +81,14 @@ impl SplitImpl {
                     };
 
                     items.push(ImplItem::Fn(syn::ImplItemFn {
-                        attrs: item.attrs.clone(),
+                        attrs: copy_non_doc_attrs(&item.attrs),
                         vis: syn::Visibility::Inherited,
                         defaultness: None,
                         sig: item.sig.clone(),
                         block,
                     }));
+
+                    item.attrs.retain(|attr| attr.path_as_string() != "inline");
                 }
                 TraitItem::Type(item) => {
                     let Some((eq_token, ty)) = item.default.take() else {
@@ -94,7 +97,7 @@ impl SplitImpl {
                     };
 
                     items.push(ImplItem::Type(syn::ImplItemType {
-                        attrs: item.attrs.clone(),
+                        attrs: copy_non_doc_attrs(&item.attrs),
                         vis: syn::Visibility::Inherited,
                         defaultness: None,
                         type_token: item.type_token.clone(),
