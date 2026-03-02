@@ -301,6 +301,22 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
     toks
 }
 
+/// Support simultaneous definition of a trait and its implementation
+#[proc_macro_attribute]
+#[proc_macro_error]
+pub fn split_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
+    match syn::parse::<lib::SplitImpl>(attr) {
+        Ok(attr) => match syn::parse::<syn::ItemTrait>(item) {
+            Ok(trait_) => attr.process(trait_).into(),
+            Err(err) => err.to_compile_error().into(),
+        },
+        Err(err) => {
+            emit_call_site_error!(err);
+            item
+        }
+    }
+}
+
 /// Implement a type with `impl Self` syntax
 ///
 /// This macro facilitates definition of a type (struct, enum or union) plus

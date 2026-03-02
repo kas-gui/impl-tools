@@ -20,8 +20,10 @@ mod default;
 pub mod fields;
 pub mod generics;
 pub mod scope;
+mod split_impl;
 
 pub use default::ImplDefault;
+pub use split_impl::SplitImpl;
 
 use proc_macro2::Span;
 use quote::ToTokens;

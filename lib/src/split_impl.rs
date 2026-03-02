@@ -1,0 +1,126 @@
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License in the LICENSE-APACHE file or at:
+//     https://www.apache.org/licenses/LICENSE-2.0
+
+//! `#[split_impl]`
+
+use proc_macro2::TokenStream;
+use proc_macro_error2::emit_error;
+use quote::quote;
+use syn::{Generics, ImplItem, ItemTrait, Token, TraitItem, Type};
+
+/// `#[split_impl]` attribute
+pub struct SplitImpl {
+    for_: Token![for],
+    generics: Generics,
+    target: Box<Type>,
+}
+
+mod parsing {
+    use super::*;
+    use syn::parse::{Parse, ParseStream, Result};
+
+    impl Parse for SplitImpl {
+        fn parse(input: ParseStream) -> Result<Self> {
+            let for_ = input.parse::<Token![for]>()?;
+            let generics = if input.peek(Token![<]) {
+                input.parse()?
+            } else {
+                Generics::default()
+            };
+            let target = input.parse()?;
+
+            Ok(SplitImpl {
+                for_,
+                generics,
+                target,
+            })
+        }
+    }
+}
+
+impl SplitImpl {
+    /// Process input
+    pub fn process(self, mut trait_: ItemTrait) -> TokenStream {
+        let mut attrs = Vec::with_capacity(trait_.attrs.len());
+        for attr in &trait_.attrs {
+            if crate::propegate_attr_to_impl(attr) {
+                attrs.push(attr.clone());
+            }
+        }
+
+        let mut items = Vec::with_capacity(trait_.items.len());
+        for item in trait_.items.iter_mut() {
+            match item {
+                TraitItem::Const(item) => {
+                    let Some((eq_token, expr)) = item.default.take() else {
+                        emit_error!(item, "definition not found");
+                        continue;
+                    };
+
+                    items.push(ImplItem::Const(syn::ImplItemConst {
+                        attrs: item.attrs.clone(),
+                        vis: syn::Visibility::Inherited,
+                        defaultness: None,
+                        const_token: item.const_token.clone(),
+                        ident: item.ident.clone(),
+                        generics: item.generics.clone(),
+                        colon_token: item.colon_token.clone(),
+                        ty: item.ty.clone(),
+                        eq_token,
+                        expr,
+                        semi_token: item.semi_token.clone(),
+                    }));
+                }
+                TraitItem::Fn(item) => {
+                    let Some(block) = item.default.take() else {
+                        emit_error!(item, "definition not found");
+                        continue;
+                    };
+
+                    items.push(ImplItem::Fn(syn::ImplItemFn {
+                        attrs: item.attrs.clone(),
+                        vis: syn::Visibility::Inherited,
+                        defaultness: None,
+                        sig: item.sig.clone(),
+                        block,
+                    }));
+                }
+                TraitItem::Type(item) => {
+                    let Some((eq_token, ty)) = item.default.take() else {
+                        emit_error!(item, "definition not found");
+                        continue;
+                    };
+
+                    items.push(ImplItem::Type(syn::ImplItemType {
+                        attrs: item.attrs.clone(),
+                        vis: syn::Visibility::Inherited,
+                        defaultness: None,
+                        type_token: item.type_token.clone(),
+                        ident: item.ident.clone(),
+                        generics: item.generics.clone(),
+                        eq_token,
+                        ty,
+                        semi_token: item.semi_token.clone(),
+                    }));
+                }
+                other => emit_error!(other, "unsupported trait item"),
+            }
+        }
+
+        let impl_ = syn::ItemImpl {
+            attrs,
+            defaultness: None,
+            unsafety: None,
+            impl_token: Default::default(),
+            generics: self.generics,
+            trait_: Some((None, trait_.ident.clone().into(), self.for_)),
+            self_ty: self.target,
+            brace_token: Default::default(),
+            items,
+        };
+
+        quote! { #trait_ #impl_ }
+    }
+}
