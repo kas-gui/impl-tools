@@ -112,12 +112,15 @@ impl SplitImpl {
             }
         }
 
+        let mut generics = self.generics;
+        utils::extend_generics(&mut generics, &trait_.generics);
+
         let impl_ = syn::ItemImpl {
             attrs,
             defaultness: None,
             unsafety: None,
             impl_token: Default::default(),
-            generics: self.generics,
+            generics,
             trait_: Some((None, trait_.ident.clone().into(), self.for_)),
             self_ty: self.target,
             brace_token: Default::default(),
