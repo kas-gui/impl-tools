@@ -33,14 +33,8 @@ mod parsing {
 
             let targets = Punctuated::parse_separated_nonempty(input)?;
 
-            let mut lookahead = input.lookahead1();
-            if lookahead.peek(Token![where]) {
+            if input.peek(Token![where]) {
                 generics.where_clause = Some(input.parse()?);
-                lookahead = input.lookahead1();
-            }
-
-            if !input.is_empty() {
-                return Err(lookahead.error());
             }
 
             let mut definitive: Option<Ident> = None;
