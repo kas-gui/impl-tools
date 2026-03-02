@@ -64,14 +64,14 @@ impl SplitImpl {
                         attrs: copy_non_doc_attrs(&item.attrs),
                         vis: syn::Visibility::Inherited,
                         defaultness: None,
-                        const_token: item.const_token.clone(),
+                        const_token: item.const_token,
                         ident: item.ident.clone(),
                         generics: item.generics.clone(),
-                        colon_token: item.colon_token.clone(),
+                        colon_token: item.colon_token,
                         ty: item.ty.clone(),
                         eq_token,
                         expr,
-                        semi_token: item.semi_token.clone(),
+                        semi_token: item.semi_token,
                     }));
                 }
                 TraitItem::Fn(item) => {
@@ -100,12 +100,12 @@ impl SplitImpl {
                         attrs: copy_non_doc_attrs(&item.attrs),
                         vis: syn::Visibility::Inherited,
                         defaultness: None,
-                        type_token: item.type_token.clone(),
+                        type_token: item.type_token,
                         ident: item.ident.clone(),
                         generics: item.generics.clone(),
                         eq_token,
                         ty,
-                        semi_token: item.semi_token.clone(),
+                        semi_token: item.semi_token,
                     }));
                 }
                 other => emit_error!(other, "unsupported trait item"),

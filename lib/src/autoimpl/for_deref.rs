@@ -214,13 +214,13 @@ impl ForDeref {
                                 // Substitute a fresh ident
                                 let name = format!("arg{i}");
                                 let ident = Ident::new(&name, Span::call_site());
-                                ty.pat = Box::new(Pat::Ident(syn::PatIdent {
+                                *ty.pat = Pat::Ident(syn::PatIdent {
                                     attrs: vec![],
                                     by_ref: None,
                                     mutability: None,
                                     ident,
                                     subpat: None,
-                                }));
+                                });
                             }
                         }
                     }
