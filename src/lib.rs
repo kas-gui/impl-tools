@@ -204,14 +204,35 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 /// # On trait definitions
 ///
 /// `#[autoimpl]` on trait definitions generates an implementation of that trait
-/// for the given targets. This functions using an implementation of [`Deref`]
-/// (and, where required, [`DerefMut`]) to lower the target type to some other
-/// type supporting the trait. We call this latter type the **definitive type**.
+/// for the given targets over that targets' own implementations of the trait.
+/// Targets may or may not be generic.
 ///
-/// It is required that the target type(s) implemented are generic over some
-/// type parameter(s). These generic parameters are introduced using `for<..>`.
-/// It is further required that at least one generic parameter has a bound on
-/// `trait`; the first such parameter is inferred to be the *definitive type*.
+/// Method implementations either defer to a field (if `using self._Member_` is
+/// specified; e.g. `using self.0` or `using self.inner`) or use [`Deref`] (and,
+/// where required, [`DerefMut`]).
+///
+/// For example,
+/// ```
+/// # use impl_tools::autoimpl;
+/// struct MyVec {
+///     vec: Vec<()>,
+/// }
+///
+/// #[autoimpl(for MyVec using self.vec)]
+/// trait IsEmpty {
+///     fn is_empty(&self) -> bool;
+/// }
+///
+/// impl<T> IsEmpty for Vec<T> {
+///     fn is_empty(&self) -> bool {
+///         Vec::is_empty(self)
+///     }
+/// }
+/// ```
+///
+/// Associated `const` and `type` items are only supported where the targets are
+/// generic over some parameter with a bound like `T: trait`. We call this the
+/// **definitive type**.
 ///
 /// For example, the following usage implements `MyTrait` for targets `&T`,
 /// `&mut T` and `Box<dyn MyTrait>` using definitive type `T`:
@@ -219,17 +240,22 @@ pub fn impl_default(args: TokenStream, item: TokenStream) -> TokenStream {
 /// # use impl_tools::autoimpl;
 /// #[autoimpl(for<T: trait + ?Sized> &T, &mut T, Box<T>)]
 /// trait MyTrait {
-///     fn f(&self) -> String;
+///     type X;
+///
+///     fn f(&self) -> Self::X;
 /// }
 /// ```
 /// The expansion for target `Box<T>` looks like:
 /// ```
 /// # trait MyTrait {
-/// #     fn f(&self) -> String;
+/// #     type X;
+/// #     fn f(&self) -> Self::X;
 /// # }
 /// #[automatically_derived]
 /// impl<T: MyTrait + ?Sized> MyTrait for Box<T> {
-///     fn f(&self) -> String {
+///     type X = <T as MyTrait>::X;
+///
+///     fn f(&self) -> Self::X {
 ///         <T as MyTrait>::f(self)
 ///     }
 /// }
