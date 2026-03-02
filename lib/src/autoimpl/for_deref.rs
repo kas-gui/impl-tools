@@ -6,6 +6,7 @@
 //! Implementation of the `#[autoimpl]` attribute
 
 use crate::generics::{GenericParam, Generics, TypeParamBound, WherePredicate};
+use crate::propegate_attr_to_impl;
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error2::{emit_call_site_error, emit_call_site_warning, emit_error};
 use quote::{quote, ToTokens, TokenStreamExt};
@@ -90,13 +91,6 @@ mod parsing {
             })
         }
     }
-}
-
-// HACK: there is no definitive determination of which attributes should be
-// emitted on the generated impl fn items. We use a whitelist.
-fn propegate_attr_to_impl(attr: &syn::Attribute) -> bool {
-    let path = attr.path().to_token_stream().to_string();
-    matches!(path.as_str(), "cfg" | "allow" | "warn" | "deny" | "forbid")
 }
 
 fn has_bound_on_self(gen: &syn::Generics) -> bool {
