@@ -25,12 +25,15 @@ mod parsing {
     impl Parse for SplitImpl {
         fn parse(input: ParseStream) -> Result<Self> {
             let for_ = input.parse::<Token![for]>()?;
-            let generics = if input.peek(Token![<]) {
+            let mut generics = if input.peek(Token![<]) {
                 input.parse()?
             } else {
                 Generics::default()
             };
             let target = input.parse()?;
+            if input.peek(Token![where]) {
+                generics.where_clause = Some(input.parse()?);
+            }
 
             Ok(SplitImpl {
                 for_,

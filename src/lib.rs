@@ -321,8 +321,8 @@ pub fn autoimpl(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// This implementation uses all method implementations from the trait.
 ///
 /// Generics may be introduced for the implementation only using syntax like
-/// `#[split_impl(for<'a, T> Target<'a, T>)]`. Implementation generics are
-/// combined with trait generics.
+/// `#[split_impl(for<'a, T> Target<'a, T> where T: Trait)]`.
+/// Implementation generics are combined with trait generics.
 ///
 /// Specific attributes of the trait are copied to the implementation: `cfg`,
 /// `allow`, `warn`, `deny`, `forbid`. All trait method attributes except `doc`
