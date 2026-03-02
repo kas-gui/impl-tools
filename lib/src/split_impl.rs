@@ -9,7 +9,7 @@ use crate::utils::{self, copy_non_doc_attrs, PathAsStr};
 use proc_macro2::TokenStream;
 use proc_macro_error2::emit_error;
 use quote::quote;
-use syn::{Generics, ImplItem, ItemTrait, Token, TraitItem, Type};
+use syn::{parse_quote, Generics, ImplItem, ItemTrait, Token, TraitItem, Type};
 
 /// `#[split_impl]` attribute
 pub struct SplitImpl {
@@ -118,13 +118,17 @@ impl SplitImpl {
         let mut generics = self.generics;
         utils::extend_generics(&mut generics, &trait_.generics);
 
+        let ident = &trait_.ident;
+        let (_, ty_generics, _) = trait_.generics.split_for_impl();
+        let path = parse_quote! { #ident #ty_generics };
+
         let impl_ = syn::ItemImpl {
             attrs,
             defaultness: None,
             unsafety: None,
             impl_token: Default::default(),
             generics,
-            trait_: Some((None, trait_.ident.clone().into(), self.for_)),
+            trait_: Some((None, path, self.for_)),
             self_ty: self.target,
             brace_token: Default::default(),
             items,
