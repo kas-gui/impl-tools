@@ -20,8 +20,12 @@ mod default;
 pub mod fields;
 pub mod generics;
 pub mod scope;
+mod split_impl;
+mod utils;
 
 pub use default::ImplDefault;
+pub use split_impl::SplitImpl;
+
 use proc_macro2::Span;
 use syn::Ident;
 

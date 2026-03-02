@@ -5,7 +5,7 @@
 
 //! The `impl_scope!` macro
 
-use crate::{fields::Fields, SimplePath};
+use crate::{fields::Fields, utils::extend_generics, SimplePath};
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error2::emit_error;
 use quote::{ToTokens, TokenStreamExt};
@@ -13,8 +13,8 @@ use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Brace, Comma, Semi};
 use syn::{
-    parse_quote, Attribute, FieldsNamed, GenericParam, Generics, Ident, ItemImpl, Path, Result,
-    Token, Type, Variant, Visibility,
+    parse_quote, Attribute, FieldsNamed, Generics, Ident, ItemImpl, Path, Result, Token, Type,
+    Variant, Visibility,
 };
 
 pub use super::default::{find_impl_default, AttrImplDefault};
@@ -524,54 +524,5 @@ mod printing {
             tokens.append_all(self.impls.iter());
             tokens.append_all(self.generated.iter());
         }
-    }
-}
-
-// Support impls on Self by replacing name and summing generics
-fn extend_generics(generics: &mut Generics, in_generics: &Generics) {
-    if generics.lt_token.is_none() {
-        debug_assert!(generics.params.is_empty());
-        debug_assert!(generics.gt_token.is_none());
-        generics.lt_token = in_generics.lt_token;
-        generics.params = in_generics.params.clone();
-        generics.gt_token = in_generics.gt_token;
-    } else if in_generics.lt_token.is_none() {
-        debug_assert!(in_generics.params.is_empty());
-        debug_assert!(in_generics.gt_token.is_none());
-    } else {
-        if !generics.params.empty_or_trailing() {
-            generics.params.push_punct(Default::default());
-        }
-        generics
-            .params
-            .extend(in_generics.params.clone().into_pairs());
-    }
-
-    // Strip defaults which are legal on the struct but not on impls
-    for param in &mut generics.params {
-        match param {
-            GenericParam::Type(p) => {
-                p.eq_token = None;
-                p.default = None;
-            }
-            GenericParam::Lifetime(_) => (),
-            GenericParam::Const(p) => {
-                p.eq_token = None;
-                p.default = None;
-            }
-        }
-    }
-
-    if let Some(ref mut clause1) = generics.where_clause {
-        if let Some(ref clause2) = in_generics.where_clause {
-            if !clause1.predicates.empty_or_trailing() {
-                clause1.predicates.push_punct(Default::default());
-            }
-            clause1
-                .predicates
-                .extend(clause2.predicates.clone().into_pairs());
-        }
-    } else {
-        generics.where_clause = in_generics.where_clause.clone();
     }
 }
