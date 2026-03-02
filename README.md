@@ -124,6 +124,26 @@ impl_tools::impl_scope! {
 
 Note: `#[impl_default]` is matched within an `impl_scope!` regardless of imports.
 
+
+### Split Impl
+
+Sometimes a trait is used only (or primarily) to provide an interface over a single object. In such cases, writing out the method prototypes twice (in both the trait and its implementation) should be unnecessary.
+
+Example:
+```rust
+#[impl_tools::split_impl(for str)]
+trait Greet {
+    /// Introduce yourself
+    fn greet(&self) {
+        println!("Hello world, I am {self}!");
+    }
+}
+
+fn main() {
+    "Ferris".greet();
+}
+```
+
 ### Impl Self
 
 `#[impl_self]` provides `impl Self` syntax, avoiding the
