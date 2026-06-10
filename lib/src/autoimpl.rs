@@ -5,16 +5,16 @@
 
 //! Implementation of the `#[autoimpl]` attribute
 
-use crate::generics::{clause_to_toks, WhereClause};
 use crate::SimplePath;
-use proc_macro2::{Span, TokenStream as Toks};
+use crate::generics::{WhereClause, clause_to_toks};
 use proc_macro_error3::emit_error;
-use quote::{quote, TokenStreamExt};
+use proc_macro2::{Span, TokenStream as Toks};
+use quote::{TokenStreamExt, quote};
 use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{
-    parse2, Field, Fields, Ident, Index, Item, ItemEnum, ItemStruct, Member, Path, PathArguments,
-    Token,
+    Field, Fields, Ident, Index, Item, ItemEnum, ItemStruct, Member, Path, PathArguments, Token,
+    parse2,
 };
 
 mod for_deref;

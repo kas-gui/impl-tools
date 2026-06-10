@@ -7,13 +7,13 @@
 
 use crate::generics::{GenericParam, Generics, TypeParamBound, WherePredicate};
 use crate::utils::propegate_attr_to_impl;
-use proc_macro2::{Span, TokenStream};
 use proc_macro_error3::{emit_call_site_error, emit_call_site_warning, emit_error};
-use quote::{quote, ToTokens, TokenStreamExt};
+use proc_macro2::{Span, TokenStream};
+use quote::{ToTokens, TokenStreamExt, quote};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Comma, Eq, PathSep};
-use syn::{parse_quote, FnArg, Ident, Item, Member, Pat, Token, TraitItem, Type, TypePath};
+use syn::{FnArg, Ident, Item, Member, Pat, Token, TraitItem, Type, TypePath, parse_quote};
 
 mod kw {
     syn::custom_keyword!(using);
@@ -163,7 +163,10 @@ impl ForDeref {
             match item {
                 TraitItem::Const(item) => {
                     let Some(definitive) = opt_definitive.as_ref() else {
-                        emit_error!(item, "cannot autoimpl an associated constant without a definitive type (e.g. `T: trait`)");
+                        emit_error!(
+                            item,
+                            "cannot autoimpl an associated constant without a definitive type (e.g. `T: trait`)"
+                        );
                         continue;
                     };
 
@@ -300,7 +303,10 @@ impl ForDeref {
                 }
                 TraitItem::Type(item) => {
                     let Some(definitive) = opt_definitive.as_ref() else {
-                        emit_error!(item, "cannot autoimpl an associated type without a definitive type (e.g. `T: trait`)");
+                        emit_error!(
+                            item,
+                            "cannot autoimpl an associated type without a definitive type (e.g. `T: trait`)"
+                        );
                         continue;
                     };
 

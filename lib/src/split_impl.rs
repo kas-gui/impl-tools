@@ -5,11 +5,11 @@
 
 //! `#[split_impl]`
 
-use crate::utils::{self, copy_non_doc_attrs, PathAsStr};
-use proc_macro2::TokenStream;
+use crate::utils::{self, PathAsStr, copy_non_doc_attrs};
 use proc_macro_error3::emit_error;
+use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse_quote, Generics, ImplItem, ItemTrait, Token, TraitItem, Type};
+use syn::{Generics, ImplItem, ItemTrait, Token, TraitItem, Type, parse_quote};
 
 /// `#[split_impl]` attribute
 pub struct SplitImpl {

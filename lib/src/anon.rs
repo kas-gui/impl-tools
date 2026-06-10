@@ -5,14 +5,14 @@
 
 //! The `impl_anon!` macro
 
+use crate::IdentFormatter;
 use crate::fields::{Field, Fields, FieldsNamed, FieldsUnnamed, StructStyle};
 use crate::scope::{Scope, ScopeItem};
-use crate::IdentFormatter;
 use proc_macro2::{Span, TokenStream};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use syn::token::{Brace, Colon, Comma, Eq, Paren, Semi};
-use syn::{parse_quote, punctuated::Punctuated, spanned::Spanned};
 use syn::{Attribute, GenericParam, Generics, Ident, ItemImpl, Member, Token, Type, TypePath};
+use syn::{parse_quote, punctuated::Punctuated, spanned::Spanned};
 
 /// A field of a [`Anon`]
 #[derive(Debug)]

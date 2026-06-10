@@ -8,7 +8,7 @@
 use super::{ImplArgs, ImplTrait, Result};
 use crate::{IdentFormatter, SimplePath};
 use proc_macro2::TokenStream as Toks;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use syn::{Fields, Index, ItemEnum, ItemStruct, Member, Token};
 
 /// Implement [`core::clone::Clone`]

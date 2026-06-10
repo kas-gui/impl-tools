@@ -6,7 +6,7 @@
 //! Custom version of [`syn`] generics supporting 'X: trait' bound
 
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::{Pair, Punctuated};
 use syn::token;
