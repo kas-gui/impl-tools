@@ -31,14 +31,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Not MSRV
-        if: ${{ matrix.variant == 'MSRV' }}
-        run: cargo generate-lockfile --ignore-rust-version
-
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
+
+      - name: Not MSRV
+        if: ${{ matrix.variant == 'MSRV' }}
+        run: cargo generate-lockfile --ignore-rust-version
 
       - name: Build docs
         if: ${{ matrix.variant == 'docs' }}

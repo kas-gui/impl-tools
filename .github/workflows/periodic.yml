@@ -1,0 +1,41 @@
+name: Periodic tests
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '0 0 * * SUN'
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Use latest dependencies
+        run: cargo generate-lockfile --ignore-rust-version
+
+      - name: Test impl-tools-lib
+        run: cargo test --manifest-path lib/Cargo.toml --lib --tests
+
+      - name: Test impl-tools
+        run: cargo test --features nightly-diagnostics --lib --tests
+
+      - name: Test test-cfg
+        working-directory: tests/test-cfg
+        run: |
+          cargo test
+          cargo test --features feature1
+
+  cargo-deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          rust-version: "1.85.0"
