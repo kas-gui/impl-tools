@@ -2,7 +2,14 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-# [0.11.4] — unreleased
+# [0.12.0] — 2026-06-10
+
+-   Add cargo-deny check (#67)
+-   Bump MSRV to 1.85.0 and Edition to 2024 (#66)
+-   Switch from `proc-macro-error2` to `proc-macro-error3` since the former is now unmaintained (#66)
+-   Add `#[split_impl]` attribute (#63, #64)
+
+# [0.11.4] — 2025-09-29
 
 -   Bump MSRV to 1.70 (#59)
 -   Add feature `nightly-diagnostics` (#60)
