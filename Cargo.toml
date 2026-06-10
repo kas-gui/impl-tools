@@ -44,7 +44,7 @@ path = "lib"
 
 [dev-dependencies]
 doc-comment = "0.3.3"
-twox-hash = "1.6.3"
+twox-hash = "2.1.1"
 trybuild = "1.0.90"
 
 [build-dependencies]
