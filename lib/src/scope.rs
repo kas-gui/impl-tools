@@ -7,7 +7,7 @@
 
 use crate::{fields::Fields, utils::extend_generics, SimplePath};
 use proc_macro2::{Span, TokenStream};
-use proc_macro_error2::emit_error;
+use proc_macro_error3::emit_error;
 use quote::{ToTokens, TokenStreamExt};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;

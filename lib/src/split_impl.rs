@@ -7,7 +7,7 @@
 
 use crate::utils::{self, copy_non_doc_attrs, PathAsStr};
 use proc_macro2::TokenStream;
-use proc_macro_error2::emit_error;
+use proc_macro_error3::emit_error;
 use quote::quote;
 use syn::{parse_quote, Generics, ImplItem, ItemTrait, Token, TraitItem, Type};
 

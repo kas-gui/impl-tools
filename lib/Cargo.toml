@@ -19,8 +19,8 @@ allow-trait-autoimpl-with-sized-fn-bound = []
 quote = "1.0"
 proc-macro2 = "1.0"
 
-[dependencies.proc-macro-error2]
-version = "2.0"
+[dependencies.proc-macro-error3]
+version = "3.0.2"
 default-features = false
 
 [dependencies.syn]
