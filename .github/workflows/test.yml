@@ -21,7 +21,7 @@ jobs:
           - os: windows-latest
             toolchain: stable
           - os: ubuntu-latest
-            toolchain: "1.70.0"
+            toolchain: "1.85.0"
             targets: "--lib --tests"
             variant: MSRV
 
