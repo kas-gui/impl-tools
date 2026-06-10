@@ -7,13 +7,13 @@
 
 use crate::generics::{GenericParam, Generics, TypeParamBound, WherePredicate};
 use crate::utils::propegate_attr_to_impl;
+use proc_macro_error3::{emit_call_site_error, emit_call_site_warning, emit_error};
 use proc_macro2::{Span, TokenStream};
-use proc_macro_error2::{emit_call_site_error, emit_call_site_warning, emit_error};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Comma, Eq, PathSep};
-use syn::{parse_quote, FnArg, Ident, Item, Member, Pat, Token, TraitItem, Type, TypePath};
+use syn::{FnArg, Ident, Item, Member, Pat, Token, TraitItem, Type, TypePath, parse_quote};
 
 mod kw {
     syn::custom_keyword!(using);
@@ -93,10 +93,10 @@ mod parsing {
     }
 }
 
-fn has_bound_on_self(gen: &syn::Generics) -> bool {
-    if let Some(ref clause) = gen.where_clause {
+fn has_bound_on_self(generics: &syn::Generics) -> bool {
+    if let Some(ref clause) = generics.where_clause {
         for pred in clause.predicates.iter() {
-            if let syn::WherePredicate::Type(ref ty) = pred {
+            if let syn::WherePredicate::Type(ty) = pred {
                 if let Type::Path(ref bounded) = ty.bounded_ty {
                     if bounded.qself.is_none() && bounded.path.is_ident("Self") {
                         if ty
@@ -163,7 +163,10 @@ impl ForDeref {
             match item {
                 TraitItem::Const(item) => {
                     let Some(definitive) = opt_definitive.as_ref() else {
-                        emit_error!(item, "cannot autoimpl an associated constant without a definitive type (e.g. `T: trait`)");
+                        emit_error!(
+                            item,
+                            "cannot autoimpl an associated constant without a definitive type (e.g. `T: trait`)"
+                        );
                         continue;
                     };
 
@@ -214,7 +217,7 @@ impl ForDeref {
                     }
 
                     for (i, arg) in item.sig.inputs.iter_mut().enumerate() {
-                        if let FnArg::Typed(ref mut ty) = arg {
+                        if let FnArg::Typed(ty) = arg {
                             if let Pat::Ident(pat) = &mut *ty.pat {
                                 // We can keep the ident but must not use `ref` / `mut` modifiers
                                 pat.by_ref = None;
@@ -249,7 +252,7 @@ impl ForDeref {
                                     Bound::ErrorEmitted
                                 }
                             }
-                            Some(FnArg::Typed(ref pat)) => match &*pat.ty {
+                            Some(FnArg::Typed(pat)) => match &*pat.ty {
                                 Type::Reference(rf) if rf.elem == parse_quote! { Self } => {
                                     Bound::Deref(rf.mutability.is_some())
                                 }
@@ -300,7 +303,10 @@ impl ForDeref {
                 }
                 TraitItem::Type(item) => {
                     let Some(definitive) = opt_definitive.as_ref() else {
-                        emit_error!(item, "cannot autoimpl an associated type without a definitive type (e.g. `T: trait`)");
+                        emit_error!(
+                            item,
+                            "cannot autoimpl an associated type without a definitive type (e.g. `T: trait`)"
+                        );
                         continue;
                     };
 

@@ -5,12 +5,12 @@
 
 //! Custom version of [`syn`] fields types supporting initializers
 
+use proc_macro_error3::emit_error;
 use proc_macro2::TokenStream;
-use proc_macro_error2::emit_error;
 use quote::{ToTokens, TokenStreamExt};
 use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
-use syn::{token, Attribute, Expr, Ident, Token, Type, Visibility};
+use syn::{Attribute, Expr, Ident, Token, Type, Visibility, token};
 
 /// Struct style: unit/tuple/regular
 #[derive(Debug)]
@@ -85,7 +85,7 @@ pub struct Field {
 pub(crate) mod parsing {
     use super::*;
     use syn::ext::IdentExt;
-    use syn::{braced, parenthesized, WhereClause};
+    use syn::{WhereClause, braced, parenthesized};
 
     impl Parse for FieldsNamed {
         fn parse(input: ParseStream) -> Result<Self> {

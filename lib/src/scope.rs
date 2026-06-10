@@ -5,19 +5,19 @@
 
 //! The `impl_scope!` macro
 
-use crate::{fields::Fields, utils::extend_generics, SimplePath};
+use crate::{SimplePath, fields::Fields, utils::extend_generics};
+use proc_macro_error3::emit_error;
 use proc_macro2::{Span, TokenStream};
-use proc_macro_error2::emit_error;
 use quote::{ToTokens, TokenStreamExt};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Brace, Comma, Semi};
 use syn::{
-    parse_quote, Attribute, FieldsNamed, Generics, Ident, ItemImpl, Path, Result, Token, Type,
-    Variant, Visibility,
+    Attribute, FieldsNamed, Generics, Ident, ItemImpl, Path, Result, Token, Type, Variant,
+    Visibility, parse_quote,
 };
 
-pub use super::default::{find_impl_default, AttrImplDefault};
+pub use super::default::{AttrImplDefault, find_impl_default};
 
 /// Attribute for `#[impl_scope]`
 pub struct ScopeModAttrs;
@@ -237,7 +237,7 @@ mod parsing {
     use crate::fields::parsing::data_struct;
     use syn::parse::{Parse, ParseStream};
     use syn::spanned::Spanned;
-    use syn::{braced, Error, Field, Lifetime, Path, TypePath, WhereClause};
+    use syn::{Error, Field, Lifetime, Path, TypePath, WhereClause, braced};
 
     impl Parse for ScopeModAttrs {
         fn parse(_input: ParseStream) -> Result<Self> {

@@ -5,16 +5,16 @@
 
 //! Implementation of the `#[autoimpl]` attribute
 
-use crate::generics::{clause_to_toks, WhereClause};
 use crate::SimplePath;
+use crate::generics::{WhereClause, clause_to_toks};
+use proc_macro_error3::emit_error;
 use proc_macro2::{Span, TokenStream as Toks};
-use proc_macro_error2::emit_error;
-use quote::{quote, TokenStreamExt};
+use quote::{TokenStreamExt, quote};
 use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{
-    parse2, Field, Fields, Ident, Index, Item, ItemEnum, ItemStruct, Member, Path, PathArguments,
-    Token,
+    Field, Fields, Ident, Index, Item, ItemEnum, ItemStruct, Member, Path, PathArguments, Token,
+    parse2,
 };
 
 mod for_deref;
@@ -188,7 +188,7 @@ pub enum Error {
 }
 
 impl Error {
-    /// Report via [`proc_macro_error2::emit_error`].
+    /// Report via [`proc_macro_error3::emit_error`].
     pub fn emit(self, target: Span, path_args: Span) {
         match self {
             Error::RequireUsing => {
@@ -293,7 +293,7 @@ impl ImplTraits {
     /// This attribute does not modify the item.
     /// The caller should append the result to `item` tokens.
     ///
-    /// Errors are reported via [`proc_macro_error2::emit_error`].
+    /// Errors are reported via [`proc_macro_error3::emit_error`].
     pub fn expand(
         self,
         item: Toks,
@@ -440,7 +440,7 @@ impl ImplTraits {
 
         fn check_is_field(mem: &Member, fields: &Fields) {
             match (fields, mem) {
-                (Fields::Named(fields), Member::Named(ref ident)) => {
+                (Fields::Named(fields), Member::Named(ident)) => {
                     if fields
                         .named
                         .iter()
