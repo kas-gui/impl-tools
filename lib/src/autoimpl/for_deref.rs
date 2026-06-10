@@ -13,18 +13,24 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Comma, Eq, PathSep};
-use syn::{parse_quote, FnArg, Ident, Item, Pat, Token, TraitItem, Type, TypePath};
+use syn::{parse_quote, FnArg, Ident, Item, Member, Pat, Token, TraitItem, Type, TypePath};
+
+mod kw {
+    syn::custom_keyword!(using);
+}
 
 /// Autoimpl for types supporting `Deref`
+#[derive(Debug)]
 pub struct ForDeref {
     generics: Generics,
-    definitive: Ident,
+    definitive: Option<Ident>,
     targets: Punctuated<Type, Comma>,
+    using: Option<Member>,
 }
 
 mod parsing {
     use super::*;
-    use syn::parse::{Error, Parse, ParseStream, Result};
+    use syn::parse::{Parse, ParseStream, Result};
 
     impl Parse for ForDeref {
         fn parse(input: ParseStream) -> Result<Self> {
@@ -33,14 +39,16 @@ mod parsing {
 
             let targets = Punctuated::parse_separated_nonempty(input)?;
 
-            let mut lookahead = input.lookahead1();
-            if lookahead.peek(Token![where]) {
-                generics.where_clause = Some(input.parse()?);
-                lookahead = input.lookahead1();
+            let mut using = None;
+            if input.peek(kw::using) {
+                let _: kw::using = input.parse()?;
+                let _: Token![self] = input.parse()?;
+                let _: Token![.] = input.parse()?;
+                using = Some(input.parse()?);
             }
 
-            if !input.is_empty() {
-                return Err(lookahead.error());
+            if input.peek(Token![where]) {
+                generics.where_clause = Some(input.parse()?);
             }
 
             let mut definitive: Option<Ident> = None;
@@ -74,20 +82,12 @@ mod parsing {
                     }
                 }
             }
-            let definitive = match definitive {
-                Some(def) => def,
-                None => {
-                    return Err(Error::new(
-                        Span::call_site(),
-                        "no definitive type parameter: require a parameter bound like `T: trait``",
-                    ));
-                }
-            };
 
             Ok(ForDeref {
                 generics,
                 definitive,
                 targets,
+                using,
             })
         }
     }
@@ -148,8 +148,13 @@ impl ForDeref {
         let (impl_generics, where_clause) =
             self.generics.impl_generics(&trait_def.generics, &trait_ty);
 
-        let definitive_ty = self.definitive;
-        let definitive = quote! { < #definitive_ty as #trait_ty > };
+        let opt_definitive = self
+            .definitive
+            .as_ref()
+            .map(|ty| quote! { < #ty as #trait_ty > });
+        let fn_definitive = opt_definitive
+            .clone()
+            .unwrap_or_else(|| quote! { #trait_ty });
 
         // Tokenize, like ToTokens impls for syn::TraitItem*, but for definition
         let mut impl_items = TokenStream::new();
@@ -157,6 +162,11 @@ impl ForDeref {
         for item in trait_def.items.into_iter() {
             match item {
                 TraitItem::Const(item) => {
+                    let Some(definitive) = opt_definitive.as_ref() else {
+                        emit_error!(item, "cannot autoimpl an associated constant without a definitive type (e.g. `T: trait`)");
+                        continue;
+                    };
+
                     for attr in item.attrs.iter() {
                         if *attr.path() == parse_quote! { cfg } {
                             attr.to_tokens(tokens);
@@ -226,26 +236,28 @@ impl ForDeref {
                     }
                     item.sig.to_tokens(tokens);
 
-                    bound = bound.max(match item.sig.inputs.first() {
-                        Some(FnArg::Receiver(rec)) => {
-                            if rec.reference.is_some() {
-                                Bound::Deref(rec.mutability.is_some())
-                            } else {
-                                emit_call_site_error!(
-                                    "cannot autoimpl trait with Deref";
-                                    note = rec.span() => "deref cannot yield `self` by value";
-                                );
-                                Bound::ErrorEmitted
+                    if self.using.is_none() {
+                        bound = bound.max(match item.sig.inputs.first() {
+                            Some(FnArg::Receiver(rec)) => {
+                                if rec.reference.is_some() {
+                                    Bound::Deref(rec.mutability.is_some())
+                                } else {
+                                    emit_call_site_error!(
+                                        "cannot autoimpl trait with Deref";
+                                        note = rec.span() => "deref cannot yield `self` by value";
+                                    );
+                                    Bound::ErrorEmitted
+                                }
                             }
-                        }
-                        Some(FnArg::Typed(ref pat)) => match &*pat.ty {
-                            Type::Reference(rf) if rf.elem == parse_quote! { Self } => {
-                                Bound::Deref(rf.mutability.is_some())
-                            }
+                            Some(FnArg::Typed(ref pat)) => match &*pat.ty {
+                                Type::Reference(rf) if rf.elem == parse_quote! { Self } => {
+                                    Bound::Deref(rf.mutability.is_some())
+                                }
+                                _ => Bound::None,
+                            },
                             _ => Bound::None,
-                        },
-                        _ => Bound::None,
-                    });
+                        });
+                    }
 
                     let ident = &item.sig.ident;
                     let params = item.sig.inputs.iter().map(|arg| {
@@ -257,7 +269,18 @@ impl ForDeref {
                                         attr.to_tokens(&mut toks);
                                     }
                                 }
-                                arg.self_token.to_tokens(&mut toks);
+                                if let Some(member) = self.using.as_ref() {
+                                    if let Some((r, _)) = arg.reference {
+                                        r.to_tokens(&mut toks);
+                                    }
+                                    if let Some(m) = arg.mutability {
+                                        m.to_tokens(&mut toks);
+                                    }
+                                    let self_ = &arg.self_token;
+                                    toks.append_all(quote! { #self_ . #member });
+                                } else {
+                                    arg.self_token.to_tokens(&mut toks);
+                                }
                             }
                             FnArg::Typed(arg) => {
                                 for attr in &arg.attrs {
@@ -272,10 +295,15 @@ impl ForDeref {
                         toks
                     });
                     tokens.append_all(quote! { {
-                        #definitive :: #ident ( #(#params),* )
+                        #fn_definitive :: #ident ( #(#params),* )
                     } });
                 }
                 TraitItem::Type(item) => {
+                    let Some(definitive) = opt_definitive.as_ref() else {
+                        emit_error!(item, "cannot autoimpl an associated type without a definitive type (e.g. `T: trait`)");
+                        continue;
+                    };
+
                     for attr in item.attrs.iter() {
                         if *attr.path() == parse_quote! { cfg } {
                             attr.to_tokens(tokens);
@@ -324,6 +352,11 @@ impl ForDeref {
         match bound {
             Bound::None => (),
             Bound::Deref(is_mut) => {
+                let Some(definitive_ty) = self.definitive.as_ref() else {
+                    emit_call_site_error!("require a definitive type (e.g. `T: trait`)");
+                    return toks;
+                };
+
                 // Emit a bound to improve error messages (see issue 27)
                 let bound = match is_mut {
                     false => quote! { ::core::ops::Deref },
