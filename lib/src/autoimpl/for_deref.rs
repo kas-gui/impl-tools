@@ -93,10 +93,10 @@ mod parsing {
     }
 }
 
-fn has_bound_on_self(gen: &syn::Generics) -> bool {
-    if let Some(ref clause) = gen.where_clause {
+fn has_bound_on_self(generics: &syn::Generics) -> bool {
+    if let Some(ref clause) = generics.where_clause {
         for pred in clause.predicates.iter() {
-            if let syn::WherePredicate::Type(ref ty) = pred {
+            if let syn::WherePredicate::Type(ty) = pred {
                 if let Type::Path(ref bounded) = ty.bounded_ty {
                     if bounded.qself.is_none() && bounded.path.is_ident("Self") {
                         if ty
@@ -214,7 +214,7 @@ impl ForDeref {
                     }
 
                     for (i, arg) in item.sig.inputs.iter_mut().enumerate() {
-                        if let FnArg::Typed(ref mut ty) = arg {
+                        if let FnArg::Typed(ty) = arg {
                             if let Pat::Ident(pat) = &mut *ty.pat {
                                 // We can keep the ident but must not use `ref` / `mut` modifiers
                                 pat.by_ref = None;
@@ -249,7 +249,7 @@ impl ForDeref {
                                     Bound::ErrorEmitted
                                 }
                             }
-                            Some(FnArg::Typed(ref pat)) => match &*pat.ty {
+                            Some(FnArg::Typed(pat)) => match &*pat.ty {
                                 Type::Reference(rf) if rf.elem == parse_quote! { Self } => {
                                     Bound::Deref(rf.mutability.is_some())
                                 }

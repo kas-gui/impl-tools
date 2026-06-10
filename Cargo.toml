@@ -6,7 +6,7 @@ authors = ["Diggory Hardy <git@dhardy.name>"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/kas-gui/impl-tools"
 rust-version = "1.85.0"
-edition = "2021"
+edition = "2024"
 
 [package]
 name = "impl-tools"

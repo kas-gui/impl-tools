@@ -440,7 +440,7 @@ impl ImplTraits {
 
         fn check_is_field(mem: &Member, fields: &Fields) {
             match (fields, mem) {
-                (Fields::Named(fields), Member::Named(ref ident)) => {
+                (Fields::Named(fields), Member::Named(ident)) => {
                     if fields
                         .named
                         .iter()
