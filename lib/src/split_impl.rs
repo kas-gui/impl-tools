@@ -49,7 +49,7 @@ impl SplitImpl {
     pub fn process(self, mut trait_: ItemTrait) -> TokenStream {
         let mut attrs = Vec::with_capacity(trait_.attrs.len());
         for attr in &trait_.attrs {
-            if utils::propegate_attr_to_impl(attr) {
+            if utils::propagate_attr_to_impl(attr) {
                 attrs.push(attr.clone());
             }
         }

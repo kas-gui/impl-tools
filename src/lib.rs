@@ -4,7 +4,7 @@
 //     https://www.apache.org/licenses/LICENSE-2.0
 
 #![allow(clippy::needless_doctest_main)]
-// Lint advocates use of bool::then_some, stablizied in rustc 1.62.0
+// Lint advocates use of bool::then_some, stabilized in rustc 1.62.0
 #![allow(clippy::unnecessary_lazy_evaluations)]
 
 //! # Impl-tools
@@ -17,7 +17,7 @@
 //!
 //! [`#[impl_self]`](macro@impl_self) provides `impl Self` syntax, avoiding the
 //! need to repeat generics when writing impls on a local type definition.
-//! This supercedes [`impl_scope!`] (except regarding [`macro@impl_default`]).
+//! This supersedes [`impl_scope!`] (except regarding [`macro@impl_default`]).
 //!
 //! [`impl_anon!`] is a function-like macro used to define and instantiate a
 //! unique (single-use) type. It supports everything supported by [`impl_scope!`]

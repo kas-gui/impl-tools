@@ -6,7 +6,7 @@
 //! Implementation of the `#[autoimpl]` attribute
 
 use crate::generics::{GenericParam, Generics, TypeParamBound, WherePredicate};
-use crate::utils::propegate_attr_to_impl;
+use crate::utils::propagate_attr_to_impl;
 use proc_macro_error3::{emit_call_site_error, emit_call_site_warning, emit_error};
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, TokenStreamExt, quote};
@@ -190,7 +190,7 @@ impl ForDeref {
                 }
                 TraitItem::Fn(mut item) => {
                     for attr in item.attrs.iter() {
-                        if propegate_attr_to_impl(attr) {
+                        if propagate_attr_to_impl(attr) {
                             attr.to_tokens(tokens);
                         }
                     }
@@ -268,7 +268,7 @@ impl ForDeref {
                         match arg {
                             FnArg::Receiver(arg) => {
                                 for attr in &arg.attrs {
-                                    if propegate_attr_to_impl(&attr) {
+                                    if propagate_attr_to_impl(&attr) {
                                         attr.to_tokens(&mut toks);
                                     }
                                 }
@@ -287,7 +287,7 @@ impl ForDeref {
                             }
                             FnArg::Typed(arg) => {
                                 for attr in &arg.attrs {
-                                    if propegate_attr_to_impl(&attr) {
+                                    if propagate_attr_to_impl(&attr) {
                                         attr.to_tokens(&mut toks);
                                     };
                                 }
