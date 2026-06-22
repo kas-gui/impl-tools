@@ -22,7 +22,7 @@ impl PathAsStr for Attribute {
 ///
 /// This is a HACK: there is no definitive determination of which attributes
 /// should be emitted on the generated impl fn items. We use a whitelist.
-pub fn propegate_attr_to_impl(attr: &Attribute) -> bool {
+pub(crate) fn propagate_attr_to_impl(attr: &Attribute) -> bool {
     matches!(
         attr.path_as_string().as_str(),
         "cfg" | "allow" | "warn" | "deny" | "forbid"

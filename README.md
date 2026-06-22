@@ -148,7 +148,7 @@ fn main() {
 
 `#[impl_self]` provides `impl Self` syntax, avoiding the
 need to repeat generics when writing impls on a local type definition.
-This supercedes `impl_scope!` (except regarding `macro@impl_default`).
+This supersedes `impl_scope!` (except regarding `macro@impl_default`).
 
 ```rust
 use std::fmt::Display;
