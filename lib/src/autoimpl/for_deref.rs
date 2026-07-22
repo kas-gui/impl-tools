@@ -10,10 +10,11 @@ use crate::utils::propagate_attr_to_impl;
 use proc_macro_error3::{emit_call_site_error, emit_call_site_warning, emit_error};
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, TokenStreamExt, quote};
+use syn::parse_quote;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Comma, Eq, PathSep};
-use syn::{FnArg, Ident, Item, Member, Pat, Token, TraitItem, Type, TypePath, parse_quote};
+use syn::{FnArg, Ident, Item, Member, Pat, ReceiverKind, Token, TraitItem, Type, TypePath};
 
 mod kw {
     syn::custom_keyword!(using);
@@ -68,8 +69,11 @@ mod parsing {
                         if let WherePredicate::Type(pred) = pred {
                             for bound in &pred.bounds {
                                 if matches!(bound, TypeParamBound::TraitSubst(_)) {
-                                    if let Type::Path(TypePath { qself: None, path }) =
-                                        &pred.bounded_ty
+                                    if let Type::Path(TypePath {
+                                        attrs: _,
+                                        qself: None,
+                                        path,
+                                    }) = &pred.bounded_ty
                                     {
                                         if let Some(ident) = path.get_ident() {
                                             definitive = Some(ident.clone());
@@ -242,7 +246,7 @@ impl ForDeref {
                     if self.using.is_none() {
                         bound = bound.max(match item.sig.inputs.first() {
                             Some(FnArg::Receiver(rec)) => {
-                                if rec.reference.is_some() {
+                                if matches!(rec.kind, ReceiverKind::Reference(_, _, _)) {
                                     Bound::Deref(rec.mutability.is_some())
                                 } else {
                                     emit_call_site_error!(
@@ -273,11 +277,11 @@ impl ForDeref {
                                     }
                                 }
                                 if let Some(member) = self.using.as_ref() {
-                                    if let Some((r, _)) = arg.reference {
+                                    if let ReceiverKind::Reference(r, _, mutability) = arg.kind {
                                         r.to_tokens(&mut toks);
-                                    }
-                                    if let Some(m) = arg.mutability {
-                                        m.to_tokens(&mut toks);
+                                        if let Some(m) = mutability {
+                                            m.to_tokens(&mut toks);
+                                        }
                                     }
                                     let self_ = &arg.self_token;
                                     toks.append_all(quote! { #self_ . #member });

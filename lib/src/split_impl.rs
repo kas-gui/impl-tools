@@ -66,7 +66,7 @@ impl SplitImpl {
                     items.push(ImplItem::Const(syn::ImplItemConst {
                         attrs: copy_non_doc_attrs(&item.attrs),
                         vis: syn::Visibility::Inherited,
-                        defaultness: None,
+                        modifiers: syn::ConstModifiers::default(),
                         const_token: item.const_token,
                         ident: item.ident.clone(),
                         generics: item.generics.clone(),
@@ -86,7 +86,7 @@ impl SplitImpl {
                     items.push(ImplItem::Fn(syn::ImplItemFn {
                         attrs: copy_non_doc_attrs(&item.attrs),
                         vis: syn::Visibility::Inherited,
-                        defaultness: None,
+                        modifiers: syn::FnModifiers::default(),
                         sig: item.sig.clone(),
                         block,
                     }));
@@ -102,7 +102,7 @@ impl SplitImpl {
                     items.push(ImplItem::Type(syn::ImplItemType {
                         attrs: copy_non_doc_attrs(&item.attrs),
                         vis: syn::Visibility::Inherited,
-                        defaultness: None,
+                        modifiers: syn::TypeModifiers::default(),
                         type_token: item.type_token,
                         ident: item.ident.clone(),
                         generics: item.generics.clone(),
@@ -124,11 +124,11 @@ impl SplitImpl {
 
         let impl_ = syn::ItemImpl {
             attrs,
-            defaultness: None,
+            modifiers: syn::ImplModifiers::default(),
             unsafety: None,
             impl_token: Default::default(),
             generics,
-            trait_: Some((None, path, self.for_)),
+            trait_: Some((path, self.for_)),
             self_ty: self.target,
             brace_token: Default::default(),
             items,

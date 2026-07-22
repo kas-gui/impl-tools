@@ -1,6 +1,6 @@
 [package]
 name = "impl-tools-lib"
-version = "0.12.0"
+version = "0.13.0"
 description = "Helper macros: autoimpl"
 keywords = ["derive", "trait"]
 readme = "README.md"
@@ -24,7 +24,7 @@ version = "3.0.2"
 default-features = false
 
 [dependencies.syn]
-version = "2.0.0"
+version = "3.0.2"
 # We need 'extra-traits' for equality testing
 # We need 'full' for parsing macros within macro arguments
 features = ["extra-traits", "full", "visit", "visit-mut"]
