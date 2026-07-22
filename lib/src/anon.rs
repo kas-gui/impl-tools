@@ -5,9 +5,9 @@
 
 //! The `impl_anon!` macro
 
-use crate::IdentFormatter;
 use crate::fields::{Field, Fields, FieldsNamed, FieldsUnnamed, StructStyle};
 use crate::scope::{Scope, ScopeItem};
+use crate::{IdentFormatter, error_on_attrs};
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, TokenStreamExt, quote};
 use syn::token::{Brace, Colon, Comma, Eq, Paren, Semi};
@@ -113,13 +113,20 @@ impl Anon {
             };
 
             let ty: Type = match field.ty {
-                Type::ImplTrait(syn::TypeImplTrait { impl_token, bounds }) => {
+                Type::ImplTrait(syn::TypeImplTrait {
+                    attrs,
+                    impl_token,
+                    bounds,
+                }) => {
+                    error_on_attrs(&attrs);
+
                     let span = quote! { #impl_token #bounds }.span();
                     let ty = Ident::new(&ty_name, span);
 
                     self.generics.params.push(parse_quote! { #ty: #bounds });
 
                     Type::Path(TypePath {
+                        attrs: vec![],
                         qself: None,
                         path: ty.into(),
                     })
@@ -129,6 +136,7 @@ impl Anon {
                     self.generics.params.push(parse_quote! { #ty });
 
                     Type::Path(TypePath {
+                        attrs: vec![],
                         qself: None,
                         path: ty.into(),
                     })
@@ -150,7 +158,12 @@ impl Anon {
                     impl<'a> syn::visit_mut::VisitMut for ReplaceInfers<'a> {
                         fn visit_type_mut(&mut self, node: &mut Type) {
                             let (span, bounds) = match node {
-                                Type::ImplTrait(syn::TypeImplTrait { impl_token, bounds }) => {
+                                Type::ImplTrait(syn::TypeImplTrait {
+                                    attrs,
+                                    impl_token,
+                                    bounds,
+                                }) => {
+                                    error_on_attrs(attrs);
                                     (impl_token.span, std::mem::take(bounds))
                                 }
                                 Type::Infer(infer) => (infer.span(), Punctuated::new()),
@@ -167,11 +180,11 @@ impl Anon {
                                 ident: ident.clone(),
                                 colon_token: Some(Default::default()),
                                 bounds,
-                                eq_token: None,
                                 default: None,
                             }));
 
                             *node = Type::Path(TypePath {
+                                attrs: vec![],
                                 qself: None,
                                 path: ident.into(),
                             });
@@ -331,8 +344,14 @@ mod parsing {
                 while let Type::Group(ty) = first_ty {
                     first_ty = *ty.elem;
                 }
-                if let Type::Path(TypePath { qself: None, path }) = first_ty {
-                    trait_ = Some((None, path, for_token));
+                if let Type::Path(TypePath {
+                    attrs,
+                    qself: None,
+                    path,
+                }) = first_ty
+                {
+                    error_on_attrs(&attrs);
+                    trait_ = Some((path, for_token));
                 } else {
                     unreachable!();
                 }
@@ -350,6 +369,7 @@ mod parsing {
         if self_ty != parse_quote! { Self } {
             if let Some(ident) = in_ident {
                 if !matches!(self_ty, Type::Path(TypePath {
+                    attrs: _,
                     qself: None,
                     path: syn::Path {
                         leading_colon: None,
@@ -379,9 +399,12 @@ mod parsing {
             items.push(content.parse()?);
         }
 
+        let mut modifiers = syn::ImplModifiers::default();
+        modifiers.defaultness = defaultness;
+
         Ok(ItemImpl {
             attrs,
-            defaultness,
+            modifiers,
             unsafety,
             impl_token,
             generics,

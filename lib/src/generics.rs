@@ -69,10 +69,8 @@ pub struct TypeParam {
     pub colon_token: Option<Token![:]>,
     /// List of type bounds
     pub bounds: Punctuated<TypeParamBound, Token![+]>,
-    /// `=`
-    pub eq_token: Option<Token![=]>,
     /// Optional default value
-    pub default: Option<Type>,
+    pub default: Option<(Token![=], Type)>,
 }
 
 /// A trait or lifetime used as a bound on a type parameter.
@@ -169,7 +167,6 @@ mod parsing {
                         ident: input.call(Ident::parse_any)?,
                         colon_token: None,
                         bounds: Punctuated::new(),
-                        eq_token: None,
                         default: None,
                     }));
                 } else {
@@ -217,8 +214,8 @@ mod parsing {
             }
 
             let eq_token: Option<Token![=]> = input.parse()?;
-            let default = if eq_token.is_some() {
-                Some(input.parse::<Type>()?)
+            let default = if let Some(tok) = eq_token {
+                Some((tok, input.parse::<Type>()?))
             } else {
                 None
             };
@@ -228,7 +225,6 @@ mod parsing {
                 ident,
                 colon_token,
                 bounds,
-                eq_token,
                 default,
             })
         }
@@ -278,6 +274,7 @@ mod parsing {
         fn parse(input: ParseStream) -> Result<Self> {
             if input.peek(Lifetime) && input.peek2(Token![:]) {
                 Ok(WherePredicate::Lifetime(PredicateLifetime {
+                    attrs: vec![],
                     lifetime: input.parse()?,
                     colon_token: input.parse()?,
                     bounds: {
@@ -403,8 +400,8 @@ mod printing_subst {
                 self.colon_token.unwrap_or_default().to_tokens(tokens);
                 self.bounds.to_tokens_subst(tokens, subst);
             }
-            if let Some(default) = &self.default {
-                self.eq_token.unwrap_or_default().to_tokens(tokens);
+            if let Some((tok, default)) = &self.default {
+                tok.to_tokens(tokens);
                 default.to_tokens(tokens);
             }
         }
@@ -477,7 +474,6 @@ fn map_generic_param(param: &syn::GenericParam) -> GenericParam {
                     .pairs()
                     .map(|pair| map_pair(pair, map_type_param_bound)),
             ),
-            eq_token: ty.eq_token,
             default: ty.default.clone(),
         }),
         syn::GenericParam::Lifetime(lt) => GenericParam::Lifetime(lt.clone()),

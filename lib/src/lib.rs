@@ -160,3 +160,12 @@ impl SimplePath {
         }
     }
 }
+
+// Attributes are supported in additional positions in syn v3.0.
+// For now we reject attributes in these positions.
+fn error_on_attrs(attrs: &[syn::Attribute]) {
+    use proc_macro_error3::emit_error;
+    for attr in attrs.iter() {
+        emit_error!(attr, "attributes are not (yet) supported in this context");
+    }
+}

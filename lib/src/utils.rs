@@ -64,12 +64,10 @@ pub fn extend_generics(generics: &mut Generics, gen2: &Generics) {
     for param in &mut generics.params {
         match param {
             GenericParam::Type(p) => {
-                p.eq_token = None;
                 p.default = None;
             }
             GenericParam::Lifetime(_) => (),
             GenericParam::Const(p) => {
-                p.eq_token = None;
                 p.default = None;
             }
         }

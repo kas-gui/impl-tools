@@ -234,6 +234,7 @@ impl Scope {
 
 mod parsing {
     use super::*;
+    use crate::error_on_attrs;
     use crate::fields::parsing::data_struct;
     use syn::parse::{Parse, ParseStream};
     use syn::spanned::Spanned;
@@ -388,8 +389,14 @@ mod parsing {
                 while let Type::Group(ty) = first_ty {
                     first_ty = *ty.elem;
                 }
-                if let Type::Path(TypePath { qself: None, path }) = first_ty {
-                    trait_ = Some((None, path, for_token));
+                if let Type::Path(TypePath {
+                    attrs,
+                    qself: None,
+                    path,
+                }) = first_ty
+                {
+                    error_on_attrs(&attrs);
+                    trait_ = Some((path, for_token));
                 } else {
                     unreachable!();
                 }
@@ -406,11 +413,12 @@ mod parsing {
 
         if self_ty != parse_quote! { Self }
             && !matches!(self_ty, Type::Path(TypePath {
+                attrs: _,
                 qself: None,
                 path: Path {
                     leading_colon: None,
                     ref segments,
-                }
+                },
             }) if segments.len() == 1 && segments.first().unwrap().ident == *in_ident)
         {
             return Err(Error::new(
@@ -431,9 +439,12 @@ mod parsing {
             items.push(content.parse()?);
         }
 
+        let mut modifiers = syn::ImplModifiers::default();
+        modifiers.defaultness = defaultness;
+
         Ok(ItemImpl {
             attrs,
-            defaultness,
+            modifiers,
             unsafety,
             impl_token,
             generics,
