@@ -47,8 +47,5 @@ doc-comment = "0.3.3"
 twox-hash = "2.1.1"
 trybuild = "1.0.90"
 
-[build-dependencies]
-autocfg = "1.1.0"
-
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mock_feature)'] }
