@@ -5,7 +5,7 @@
 
 //! `#[split_impl]`
 
-use crate::utils::{self, PathAsStr, copy_non_doc_attrs};
+use crate::utils::{self, PathAsStr, copy_item_impl_attrs};
 use proc_macro_error3::emit_error;
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -64,7 +64,7 @@ impl SplitImpl {
                     };
 
                     items.push(ImplItem::Const(syn::ImplItemConst {
-                        attrs: copy_non_doc_attrs(&item.attrs),
+                        attrs: copy_item_impl_attrs(&item.attrs),
                         vis: syn::Visibility::Inherited,
                         modifiers: syn::ConstModifiers::default(),
                         const_token: item.const_token,
@@ -84,7 +84,7 @@ impl SplitImpl {
                     };
 
                     items.push(ImplItem::Fn(syn::ImplItemFn {
-                        attrs: copy_non_doc_attrs(&item.attrs),
+                        attrs: copy_item_impl_attrs(&item.attrs),
                         vis: syn::Visibility::Inherited,
                         modifiers: syn::FnModifiers::default(),
                         sig: item.sig.clone(),
@@ -100,7 +100,7 @@ impl SplitImpl {
                     };
 
                     items.push(ImplItem::Type(syn::ImplItemType {
-                        attrs: copy_non_doc_attrs(&item.attrs),
+                        attrs: copy_item_impl_attrs(&item.attrs),
                         vis: syn::Visibility::Inherited,
                         modifiers: syn::TypeModifiers::default(),
                         type_token: item.type_token,
