@@ -15,6 +15,7 @@ trait Interface {
     }
 
     /// Get the weight (Lb)
+    #[must_use]
     fn weight(&self) -> f64 {
         let m: f64 = self.mass.into();
         m * 2.2046244201837775

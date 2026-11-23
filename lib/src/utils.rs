@@ -29,11 +29,13 @@ pub(crate) fn propagate_attr_to_impl(attr: &Attribute) -> bool {
     )
 }
 
-/// Copy all attrs except `#[doc]`
-pub fn copy_non_doc_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
+/// Copy all attrs applicable to trait impl items.
+///
+/// Currently this is everything except `#[doc]` and `#[must_use]`.
+pub fn copy_item_impl_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
     let mut dest = Vec::with_capacity(attrs.len());
     for attr in attrs {
-        if attr.path_as_string() != "doc" {
+        if !matches!(attr.path_as_string().as_str(), "doc" | "must_use") {
             dest.push(attr.clone());
         }
     }

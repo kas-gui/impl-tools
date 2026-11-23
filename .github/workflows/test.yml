@@ -44,7 +44,7 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
 
       - name: Not MSRV
-        if: ${{ matrix.variant == 'MSRV' }}
+        if: ${{ matrix.variant != 'MSRV' }}
         run: cargo generate-lockfile --ignore-rust-version
 
       - name: Build docs
